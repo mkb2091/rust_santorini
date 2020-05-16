@@ -1,14 +1,13 @@
 use crate::lib;
-use rand::prelude::*;
 
-pub struct RandomChoice {}
+pub struct FirstChoice {}
 
-impl RandomChoice {
+impl FirstChoice {
     pub fn new() -> Self {
         Self {}
     }
 }
-impl lib::Player for RandomChoice {
+impl lib::Player for FirstChoice {
     fn get_action(
         &mut self,
         game: &lib::Game,
@@ -16,13 +15,11 @@ impl lib::Player for RandomChoice {
     ) -> (lib::Worker, (u8, u8), (u8, u8)) {
         let mut possible_actions = game.list_possible_actions(player_id);
         if !possible_actions.is_empty() {
-            possible_actions.shuffle(&mut rand::thread_rng());
             possible_actions[0]
         } else {
             (lib::Worker::One, (0, 0), (0, 0))
         }
     }
-
     fn get_starting_position(
         &mut self,
         player_locations: &[((u8, u8), (u8, u8))],

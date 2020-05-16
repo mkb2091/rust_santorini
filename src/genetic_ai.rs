@@ -168,6 +168,21 @@ impl lib::Player for GeneticAI {
             })
             .unwrap_or(&(lib::Worker::One, (0, 0), (0, 0)))
     }
+    fn get_starting_position(
+        &mut self,
+        player_locations: &[((u8, u8), (u8, u8))],
+    ) -> ((u8, u8), (u8, u8)) {
+        let mut values: Vec<(u8, u8)> = Vec::new();
+        for &i in [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (1, 0)].iter() {
+            if player_locations
+                .iter()
+                .all(|&(val1, val2)| val1 != i && val2 != i)
+            {
+                values.push(i);
+            }
+        }
+        return (values[0], values[1]);
+    }
 }
 
 pub fn train(
@@ -178,7 +193,6 @@ pub fn train(
 ) -> Vec<GeneticAI> {
     let mut ais = base.clone();
     let mut rng = rand::thread_rng();
-    let mut squares: Vec<(u8, u8)> = (0..25).map(|val| (val / 5, val % 5)).collect();
     for iteration in 0..iterations {
         println!("Training iteration: {}", iteration);
         let mut new: Vec<GeneticAI> = ais.iter().map(|ai| ai.create_altered(&mut rng)).collect();
@@ -191,18 +205,9 @@ pub fn train(
         for (i1, ai1) in ais.iter().enumerate() {
             for (i2, ai2) in new.iter().enumerate() {
                 for _ in 0..matches {
-                    squares.shuffle(&mut rng);
                     let players: [Option<Box<(dyn lib::Player)>>; 3] =
                         [Some(Box::new(*ai1)), Some(Box::new(*ai2)), None];
-                    let result = lib::GameManager::new(
-                        players,
-                        [
-                            (squares[0], squares[1]),
-                            (squares[2], squares[3]),
-                            (squares[4], squares[5]),
-                        ],
-                    )
-                    .main_loop();
+                    let result = lib::GameManager::new(players).main_loop();
                     if let Some(result) = result {
                         if result == 0 {
                             old_scores[i1] += 1

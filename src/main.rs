@@ -97,6 +97,78 @@ impl lib::Player for RealPlayer {
             return (worker, (move_x, move_y), (build_x, build_y));
         }
     }
+    fn get_starting_position(
+        &mut self,
+        player_locations: &[((u8, u8), (u8, u8))],
+    ) -> ((u8, u8), (u8, u8)) {
+        loop {
+            let w1 = {
+                println!("Enter coordinates of first worker");
+                let mut input = String::new();
+                match std::io::stdin().read_line(&mut input) {
+                    Ok(n) => {}
+                    Err(error) => println!("Error: {}", error),
+                }
+                let coordinates: Vec<&str> = input.split_whitespace().collect();
+                let (mut x, mut y) = (0, 0);
+                let mut valid = false;
+                if coordinates.len() == 2 {
+                    if let Ok(x_tmp) = coordinates[1].parse::<u8>() {
+                        if let Ok(y_tmp) = coordinates[0].parse::<u8>() {
+                            x = x_tmp;
+                            y = y_tmp;
+                            valid = true;
+                        }
+                    };
+                }
+                if !valid
+                    || x > 4
+                    || y > 4
+                    || player_locations
+                        .iter()
+                        .any(|&(val1, val2)| val1 == (x, y) || val2 == (x, y))
+                {
+                    println!("Not valid coordinates");
+                    continue;
+                } else {
+                    (x, y)
+                }
+            };
+            let w2 = {
+                println!("Enter coordinates of second worker");
+                let mut input = String::new();
+                match std::io::stdin().read_line(&mut input) {
+                    Ok(n) => {}
+                    Err(error) => println!("Error: {}", error),
+                }
+                let coordinates: Vec<&str> = input.split_whitespace().collect();
+                let (mut x, mut y) = (0, 0);
+                let mut valid = false;
+                if coordinates.len() == 2 {
+                    if let Ok(x_tmp) = coordinates[1].parse::<u8>() {
+                        if let Ok(y_tmp) = coordinates[0].parse::<u8>() {
+                            x = x_tmp;
+                            y = y_tmp;
+                            valid = true;
+                        }
+                    };
+                }
+                if !valid
+                    || x > 4
+                    || y > 4
+                    || player_locations
+                        .iter()
+                        .any(|&(val1, val2)| val1 == (x, y) || val2 == (x, y))
+                {
+                    println!("Not valid coordinates");
+                    continue;
+                } else {
+                    (x, y)
+                }
+            };
+            return (w1, w2);
+        }
+    }
 }
 
 fn main() {
@@ -108,9 +180,6 @@ fn main() {
     let player2 = result[0];
     let players: [Option<Box<(dyn lib::Player)>>; 3] =
         [Some(Box::new(player1)), Some(Box::new(player2)), None];
-    let mut game = lib::GameManager::new(
-        players,
-        [((1, 1), (1, 2)), ((3, 0), (2, 4)), ((0, 0), (0, 0))],
-    );
+    let mut game = lib::GameManager::new(players);
     game.main_loop();
 }

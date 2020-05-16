@@ -1,5 +1,10 @@
 pub trait Player {
     fn get_action(&mut self, game: &Game, player_id: usize) -> (Worker, (u8, u8), (u8, u8));
+
+    fn get_starting_position(
+        &mut self,
+        player_locations: &[((u8, u8), (u8, u8))],
+    ) -> ((u8, u8), (u8, u8));
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -244,10 +249,7 @@ pub struct GameManager {
 }
 
 impl GameManager {
-    pub fn new(
-        players: [Option<Box<dyn Player>>; 3],
-        player_locations: [((u8, u8), (u8, u8)); 3],
-    ) -> Self {
+    pub fn new(players: [Option<Box<dyn Player>>; 3]) -> Self {
         let mut player_statuses = [Status::Dead; 3];
         for (i, player) in players.iter().enumerate() {
             if player.is_some() {
@@ -258,13 +260,42 @@ impl GameManager {
             players,
             game: Game {
                 board: [[TowerStates::Empty; 5]; 5],
-                player_locations,
+                player_locations: [((0, 0), (0, 0)); 3],
                 player_statuses,
             },
         }
     }
 
     pub fn main_loop(&mut self) -> Option<usize> {
+        let mut start_locations: Vec<((u8, u8), (u8, u8))> = Vec::new();
+        let players: Vec<usize> = self
+            .game
+            .player_statuses
+            .iter()
+            .enumerate()
+            .filter(|(_, &status)| status == Status::Playing)
+            .map(|(i, _)| i)
+            .collect();
+        for &player_id in players.iter() {
+            if let Some(player) = &mut self.players[player_id] {
+                let (w1, w2) = player.get_starting_position(&start_locations);
+                if w1 != w2
+                    && !start_locations
+                        .iter()
+                        .any(|&(val1, val2)| w1 == val1 || w2 == val1 || w1 == val2 || w2 == val2)
+                    && w1.0 <= 4
+                    && w1.1 <= 4
+                    && w2.0 <= 4
+                    && w2.1 <= 4
+                {
+                    start_locations.push((w1, w2));
+                    self.game.player_locations[player_id] == (w1, w2);
+                } else {
+					println!("Failed to enter valid start location");
+}
+            }
+        }
+
         while self
             .game
             .player_statuses
@@ -291,7 +322,7 @@ impl GameManager {
                         if self.game.board[move_x as usize][move_y as usize] == TowerStates::Level3
                         {
                             //println!("Player {} won", player_id);
-                            self.game.print_board();
+                            //self.game.print_board();
                             return Some(player_id);
                         }
                         if worker == Worker::One {
