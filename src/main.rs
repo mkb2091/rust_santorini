@@ -103,6 +103,7 @@ fn main() {
     //let player1 = RealPlayer::new();
     let players = [genetic_ai::GeneticAI::new(); 100];
     let result = genetic_ai::train(players.to_vec(), 50, 10, 10);
+    println!("{:?}", result[0]);
     let player1 = RealPlayer::new();
     let player2 = result[0];
     let players: [Option<Box<(dyn lib::Player)>>; 3] =

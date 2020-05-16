@@ -4,7 +4,7 @@ use rand::prelude::*;
 lazy_static! {
     static ref GENES: [std::sync::Arc<dyn ActionScorer>; GENE_COUNT] = [
         std::sync::Arc::new(PrioritizeClimbing {}),
-        std::sync::Arc::new(PrioritizeClimbing {}),
+        std::sync::Arc::new(PrioritizeCapping {}),
     ];
 }
 
@@ -18,7 +18,7 @@ trait ActionScorer: Sync + Send {
         worker: lib::Worker,
         movement: (u8, u8),
         build: (u8, u8),
-    ) -> u32;
+    ) -> i32;
 }
 
 struct PrioritizeClimbing {}
@@ -30,8 +30,11 @@ impl ActionScorer for PrioritizeClimbing {
         worker: lib::Worker,
         movement: (u8, u8),
         build: (u8, u8),
-    ) -> u32 {
-        game.board[movement.0 as usize][movement.1 as usize].to_int() as u32
+    ) -> i32 {
+        let (w1, w2) = game.player_locations[player_id];
+        let old_pos = if worker == lib::Worker::One { w1 } else { w2 };
+        (game.board[movement.0 as usize][movement.1 as usize].to_int() as i32)
+            - (game.board[old_pos.0 as usize][old_pos.1 as usize].to_int() as i32)
     }
 }
 
@@ -44,14 +47,14 @@ impl ActionScorer for PrioritizeCapping {
         worker: lib::Worker,
         movement: (u8, u8),
         build: (u8, u8),
-    ) -> u32 {
-        (game.board[build.0 as usize][build.1 as usize] == lib::TowerStates::Level3) as u32
+    ) -> i32 {
+        (game.board[build.0 as usize][build.1 as usize] == lib::TowerStates::Level3) as i32
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct GeneticAI {
-    gene_weighting: [u32; GENE_COUNT],
+    gene_weighting: [u16; GENE_COUNT],
     //rng: rand::rngs::thread::ThreadRng
 }
 
@@ -71,12 +74,12 @@ impl GeneticAI {
         worker: lib::Worker,
         movement: (u8, u8),
         build: (u8, u8),
-    ) -> u32 {
+    ) -> i32 {
         GENES
             .iter()
             .zip(self.gene_weighting.iter())
             .map(|(gene, weighting)| {
-                gene.get_score(game, player_id, worker, movement, build) * weighting
+                gene.get_score(game, player_id, worker, movement, build) * (*weighting as i32)
             })
             .sum()
     }

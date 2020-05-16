@@ -82,14 +82,15 @@ impl Game {
     ) -> bool {
         let (move_x, move_y) = movement;
         let (build_x, build_y) = build;
+        let (old_w1, old_w2) = self.player_locations[player_id];
         for (i, (w1, w2)) in self.player_locations.iter().enumerate() {
             if self.player_statuses[i] == Status::Playing {
                 if (move_x, move_y) == *w1 || (move_x, move_y) == *w2 {
                     // Check if player is moving into an already occupied block
                     return false;
                 }
-                if (worker == Worker::One && (build_x, build_y) == *w2)
-                    || (worker == Worker::Two && (build_x, build_y) == *w1)
+                if ((build_x, build_y) == *w1 && !(worker == Worker::One && old_w1 == *w1))
+                    || ((build_x, build_y) == *w2 && !(worker == Worker::Two && old_w2 == *w2))
                 {
                     // Check if player is building on an already occupied block
                     return false;
@@ -117,7 +118,7 @@ impl Game {
             // Check for moving on to a dome
             return false;
         } else if (move_x, move_y) == (build_x, build_y) {
-            // Check for building where
+            // Check for building where moving to
             return false;
         } else if (move_x as i8 - build_x as i8).abs() > 1
             && (move_y as i8 - build_y as i8).abs() > 1
@@ -284,6 +285,7 @@ impl GameManager {
                         if self.game.board[move_x as usize][move_y as usize] == TowerStates::Level3
                         {
                             //println!("Player {} won", player_id);
+                            self.game.print_board();
                             return Some(player_id);
                         }
                         if worker == Worker::One {
