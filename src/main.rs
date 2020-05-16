@@ -11,11 +11,8 @@ impl RealPlayer {
 impl lib::Player for RealPlayer {
     fn get_action(
         &mut self,
-        board: &[[lib::TowerStates; 5]; 5],
-        worker1: (u8, u8),
-        worker2: (u8, u8),
-        player_locations: [((u8, u8), (u8, u8)); 3],
-        player_statuses: [lib::Status; 3],
+        game: &lib::Game,
+        player_id: usize,
     ) -> (lib::Worker, (u8, u8), (u8, u8)) {
         loop {
             let worker: lib::Worker = {
@@ -25,7 +22,7 @@ impl lib::Player for RealPlayer {
                     Ok(n) => {}
                     Err(error) => println!("Error: {}", error),
                 }
-                match (&input.trim().to_lowercase() as &str) {
+                match &input.trim().to_lowercase() as &str {
                     "o" => lib::Worker::One,
                     "one" => lib::Worker::One,
                     "1" => lib::Worker::One,
@@ -100,7 +97,7 @@ fn main() {
     let player2 = RealPlayer::new();
     let players: [Option<Box<(dyn lib::Player)>>; 3] =
         [Some(Box::new(player1)), Some(Box::new(player2)), None];
-    let mut game = lib::Game::new(
+    let mut game = lib::GameManager::new(
         players,
         [((1, 1), (1, 2)), ((3, 0), (2, 4)), ((0, 0), (0, 0))],
     );
