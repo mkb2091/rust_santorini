@@ -115,8 +115,15 @@ pub fn print_board(
             new_board[*w2x as usize][*w2y as usize] = Some((Worker::Two, player));
         }
     }
-
-    for (row1, row2) in board.iter().zip(new_board.iter()) {
+    result.push(' ');
+    for i in 0..5 {
+        result.push_str("  ");
+        result.push_str(&i.to_string());
+        result.push_str("   ");
+    }
+    result.push('\n');
+    for (i, (row1, row2)) in board.iter().zip(new_board.iter()).enumerate() {
+        result.push(' ');
         for square in row1.iter() {
             result.push(' ');
             result.push_str(&square.to_string());
@@ -126,7 +133,7 @@ pub fn print_board(
             result.push(' ');
         }
         result.push('\n');
-
+        result.push_str(&i.to_string());
         for (s1, s2) in row1.iter().zip(row2.iter()) {
             result.push(' ');
             result.push_str(&s1.to_string());
@@ -140,6 +147,8 @@ pub fn print_board(
             result.push(' ');
         }
         result.push('\n');
+
+        result.push(' ');
         for square in row1.iter() {
             result.push(' ');
             result.push_str(&square.to_string());
