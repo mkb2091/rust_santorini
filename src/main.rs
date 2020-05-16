@@ -75,8 +75,8 @@ impl lib::Player for RealPlayer {
                 let (mut x, mut y) = (0, 0);
                 let mut valid = false;
                 if coordinates.len() == 2 {
-                    if let Ok(x_tmp) = coordinates[0].parse::<u8>() {
-                        if let Ok(y_tmp) = coordinates[1].parse::<u8>() {
+                    if let Ok(x_tmp) = coordinates[1].parse::<u8>() {
+                        if let Ok(y_tmp) = coordinates[0].parse::<u8>() {
                             x = x_tmp;
                             y = y_tmp;
                             valid = true;

@@ -9,13 +9,34 @@ pub trait Player {
     ) -> (Worker, (u8, u8), (u8, u8));
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum TowerStates {
     Empty,
     Level1,
     Level2,
     Level3,
     Capped,
+}
+
+impl TowerStates {
+    pub fn increase(&self) -> Option<Self> {
+        match self {
+            TowerStates::Empty => Some(TowerStates::Level1),
+            TowerStates::Level1 => Some(TowerStates::Level2),
+            TowerStates::Level2 => Some(TowerStates::Level3),
+            TowerStates::Level3 => Some(TowerStates::Capped),
+            TowerStates::Capped => None,
+        }
+    }
+    pub fn to_int(&self) -> u8 {
+        match self {
+            TowerStates::Empty => 0,
+            TowerStates::Level1 => 1,
+            TowerStates::Level2 => 2,
+            TowerStates::Level3 => 3,
+            TowerStates::Capped => 4,
+        }
+    }
 }
 
 impl ToString for TowerStates {
@@ -98,26 +119,73 @@ impl Game {
                         self.player_locations.clone(),
                         self.player_statuses.clone(),
                     );
-                    for (w1, w2) in self.player_locations.iter() {
-                        if (move_x, move_y) == *w1 || (move_x, move_y) == *w2 {
-                            println!("Player moved into already occupied space");
-                            self.player_statuses[player_id] = Status::Dead;
+                    for (i, (w1, w2)) in self.player_locations.iter().enumerate() {
+                        if self.player_statuses[i] == Status::Playing {
+                            if (move_x, move_y) == *w1 || (move_x, move_y) == *w2 {
+                                println!("Player moved into already occupied space");
+                                self.player_statuses[player_id] = Status::Dead;
+                            }
+                            if (worker == Worker::One && (build_x, build_y) == *w2)
+                                || (worker == Worker::Two && (build_x, build_y) == *w1)
+                            {
+                                println!("Cannot build on occupied block");
+                                self.player_statuses[player_id] = Status::Dead;
+                            }
                         }
                     }
                     if self.player_statuses[player_id] == Status::Playing {
-                        if worker == Worker::One
-                            && (worker1.0 as i8 - move_x as i8).abs() <= 1
-                            && (worker1.1 as i8 - move_y as i8).abs() <= 1
-                        {
-                            self.player_locations[player_id].0 = (move_x, move_y);
-                        } else if worker == Worker::Two
-                            && (worker2.0 as i8 - move_x as i8).abs() <= 1
-                            && (worker2.1 as i8 - move_y as i8).abs() <= 1
-                        {
-                            self.player_locations[player_id].1 = (move_x, move_y);
+                        let base_worker = if worker == Worker::One {
+                            worker1
                         } else {
-                            println!("Player moved more than allowed distance");
+                            worker2
+                        };
+                        if (base_worker.0 as i8 - move_x as i8).abs() > 1
+                            && (base_worker.1 as i8 - move_y as i8).abs() > 1
+                        {
+                            // Check for moving more than 1 block
+                            println!("Workers cannot move more than one block");
                             self.player_statuses[player_id] = Status::Dead;
+                        } else if (self.board[base_worker.0 as usize][base_worker.1 as usize]
+                            .to_int() as i8
+                            - self.board[move_x as usize][move_y as usize].to_int() as i8)
+                            < -1
+                        {
+                            // Check for moving up more than 1 level
+                            println!("Workers cannot move up more than one level higher");
+                            self.player_statuses[player_id] = Status::Dead;
+                        } else if self.board[move_x as usize][move_y as usize]
+                            == TowerStates::Capped
+                        {
+                            // Check for moving on to a dome
+                            println!("Worker cannot move on to a dome");
+                            self.player_statuses[player_id] = Status::Dead;
+                        } else if (move_x, move_y) == (build_x, build_y) {
+                            // Check for building where
+                            println!("Cannot build on occupied block");
+                            self.player_statuses[player_id] = Status::Dead;
+                        } else {
+                            if worker == Worker::One {
+                                self.player_locations[player_id].0 = (move_x, move_y);
+                            } else {
+                                self.player_locations[player_id].1 = (move_x, move_y);
+                            }
+                        }
+                        if self.player_statuses[player_id] == Status::Playing {
+                            if (move_x as i8 - build_x as i8).abs() <= 1
+                                && (move_y as i8 - build_y as i8).abs() <= 1
+                            {
+                                if let Some(new) =
+                                    self.board[build_x as usize][build_y as usize].increase()
+                                {
+                                    self.board[build_x as usize][build_y as usize] = new;
+                                } else {
+                                    println!("Can't build on dome");
+                                    self.player_statuses[player_id] = Status::Dead;
+                                }
+                            } else {
+                                println!("Build location is not within range");
+                                self.player_statuses[player_id] = Status::Dead;
+                            }
                         }
                     }
                 }
