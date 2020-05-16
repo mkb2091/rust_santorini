@@ -45,6 +45,12 @@ impl ToString for TowerStates {
     }
 }
 
+impl std::cmp::PartialOrd for TowerStates {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.to_int().cmp(&other.to_int()))
+    }
+}
+
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Worker {
     One,
