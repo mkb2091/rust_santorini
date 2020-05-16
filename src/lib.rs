@@ -67,9 +67,9 @@ pub enum Status {
 }
 
 pub struct Game {
-    board: [[TowerStates; 5]; 5],
-    player_locations: [((u8, u8), (u8, u8)); 3],
-    player_statuses: [Status; 3],
+    pub board: [[TowerStates; 5]; 5],
+    pub player_locations: [((u8, u8), (u8, u8)); 3],
+    pub player_statuses: [Status; 3],
 }
 
 impl Game {
@@ -190,22 +190,37 @@ impl Game {
     }
     pub fn list_possible_actions(&self, player_id: usize) -> Vec<(Worker, (u8, u8), (u8, u8))> {
         let mut possible_actions: Vec<(Worker, (u8, u8), (u8, u8))> = Vec::new();
+        let (worker1, worker2) = self.player_locations[player_id];
         for &worker in [Worker::One, Worker::Two].iter() {
-            for move_x in 0..5 {
-                for move_y in 0..5 {
-                    for build_x in 0..5 {
-                        for build_y in 0..5 {
-                            if self.is_valid(
-                                player_id,
-                                worker,
-                                (move_x, move_y),
-                                (build_x, build_y),
-                            ) {
-                                possible_actions.push((
-                                    worker,
-                                    (move_x, move_y),
-                                    (build_x, build_y),
-                                ));
+            let w = if worker == Worker::One {
+                worker1
+            } else {
+                worker2
+            };
+            for &m in &[
+                (w.0 - 1, w.1 - 1),
+                (w.0, w.1 - 1),
+                (w.0 + 1, w.1 - 1),
+                (w.0 - 1, w.1),
+                (w.0 - 1, w.1 + 1),
+                (w.0, w.1 + 1),
+                (w.0 + 1, w.1),
+                (w.0 + 1, w.1 + 1),
+            ] {
+                if m.0 <= 4 && m.1 <= 4 {
+                    for &b in &[
+                        (m.0 - 1, m.1 - 1),
+                        (m.0, m.1 - 1),
+                        (m.0 + 1, m.1 - 1),
+                        (m.0 - 1, m.1),
+                        (m.0 - 1, m.1 + 1),
+                        (m.0, m.1 + 1),
+                        (m.0 + 1, m.1),
+                        (m.0 + 1, m.1 + 1),
+                    ] {
+                        if b.0 <= 4 && b.1 <= 4 {
+                            if self.is_valid(player_id, worker, m, b) {
+                                possible_actions.push((worker, m, b));
                             }
                         }
                     }
@@ -242,8 +257,13 @@ impl GameManager {
         }
     }
 
-    pub fn main_loop(&mut self) -> usize {
-        loop {
+    pub fn main_loop(&mut self) -> Option<usize> {
+        while self
+            .game
+            .player_statuses
+            .iter()
+            .any(|&status| status == Status::Playing)
+        {
             let players: Vec<usize> = self
                 .game
                 .player_statuses
@@ -261,6 +281,11 @@ impl GameManager {
                         .game
                         .is_valid(player_id, worker, (move_x, move_y), (build_x, build_y))
                     {
+                        if self.game.board[move_x as usize][move_y as usize] == TowerStates::Level3
+                        {
+                            //println!("Player {} won", player_id);
+                            return Some(player_id);
+                        }
                         if worker == Worker::One {
                             self.game.player_locations[player_id].0 = (move_x, move_y);
                         } else {
@@ -272,9 +297,12 @@ impl GameManager {
                         {
                             self.game.board[build_x as usize][build_y as usize] = new;
                         }
+                    } else {
+                        self.game.player_statuses[player_id] = Status::Dead;
                     }
                 }
             }
         }
+        return None;
     }
 }

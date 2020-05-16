@@ -1,5 +1,9 @@
+mod first_choice_player;
+mod genetic_ai;
 mod lib;
 mod random_choice_player;
+#[macro_use]
+extern crate lazy_static;
 
 struct RealPlayer {}
 
@@ -96,8 +100,11 @@ impl lib::Player for RealPlayer {
 }
 
 fn main() {
+    //let player1 = RealPlayer::new();
+    let players = [genetic_ai::GeneticAI::new(); 100];
+    let result = genetic_ai::train(players.to_vec(), 50, 10, 10);
     let player1 = RealPlayer::new();
-    let player2 = random_choice_player::RandomChoice::new();
+    let player2 = result[0];
     let players: [Option<Box<(dyn lib::Player)>>; 3] =
         [Some(Box::new(player1)), Some(Box::new(player2)), None];
     let mut game = lib::GameManager::new(
@@ -105,5 +112,4 @@ fn main() {
         [((1, 1), (1, 2)), ((3, 0), (2, 4)), ((0, 0), (0, 0))],
     );
     game.main_loop();
-    println!("Hello, world!");
 }
