@@ -1,4 +1,5 @@
 mod lib;
+mod random_choice_player;
 
 struct RealPlayer {}
 
@@ -14,6 +15,8 @@ impl lib::Player for RealPlayer {
         game: &lib::Game,
         player_id: usize,
     ) -> (lib::Worker, (u8, u8), (u8, u8)) {
+        game.print_board();
+        println!("Player: {}", player_id);
         loop {
             let worker: lib::Worker = {
                 println!("Enter which worker to select");
@@ -94,7 +97,7 @@ impl lib::Player for RealPlayer {
 
 fn main() {
     let player1 = RealPlayer::new();
-    let player2 = RealPlayer::new();
+    let player2 = random_choice_player::RandomChoice::new();
     let players: [Option<Box<(dyn lib::Player)>>; 3] =
         [Some(Box::new(player1)), Some(Box::new(player2)), None];
     let mut game = lib::GameManager::new(

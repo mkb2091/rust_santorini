@@ -85,13 +85,13 @@ impl Game {
         for (i, (w1, w2)) in self.player_locations.iter().enumerate() {
             if self.player_statuses[i] == Status::Playing {
                 if (move_x, move_y) == *w1 || (move_x, move_y) == *w2 {
-                    println!("Player moved into already occupied space");
+                    // Check if player is moving into an already occupied block
                     return false;
                 }
                 if (worker == Worker::One && (build_x, build_y) == *w2)
                     || (worker == Worker::Two && (build_x, build_y) == *w1)
                 {
-                    println!("Cannot build on occupied block");
+                    // Check if player is building on an already occupied block
                     return false;
                 }
             }
@@ -106,30 +106,26 @@ impl Game {
             && (base_worker.1 as i8 - move_y as i8).abs() > 1
         {
             // Check for moving more than 1 block
-            println!("Workers cannot move more than one block");
             return false;
         } else if (self.board[base_worker.0 as usize][base_worker.1 as usize].to_int() as i8
             - self.board[move_x as usize][move_y as usize].to_int() as i8)
             < -1
         {
             // Check for moving up more than 1 level
-            println!("Workers cannot move up more than one level higher");
             return false;
         } else if self.board[move_x as usize][move_y as usize] == TowerStates::Capped {
             // Check for moving on to a dome
-            println!("Worker cannot move on to a dome");
             return false;
         } else if (move_x, move_y) == (build_x, build_y) {
             // Check for building where
-            println!("Cannot build on occupied block");
             return false;
         } else if (move_x as i8 - build_x as i8).abs() > 1
             && (move_y as i8 - build_y as i8).abs() > 1
         {
-            println!("Build location is not within range");
+            // Check that build location is within 1 block
             return false;
         } else if self.board[build_x as usize][build_y as usize] == TowerStates::Capped {
-            println!("Can't build on dome");
+            // Check player is not trying to build on a dome
             return false;
         } else {
             return true;
@@ -199,7 +195,12 @@ impl Game {
                 for move_y in 0..5 {
                     for build_x in 0..5 {
                         for build_y in 0..5 {
-                            if self.is_valid(player_id, worker, (move_x, move_y), (build_x, build_y)) {
+                            if self.is_valid(
+                                player_id,
+                                worker,
+                                (move_x, move_y),
+                                (build_x, build_y),
+                            ) {
                                 possible_actions.push((
                                     worker,
                                     (move_x, move_y),
@@ -211,7 +212,7 @@ impl Game {
                 }
             }
         }
-possible_actions
+        possible_actions
     }
 }
 
@@ -253,8 +254,6 @@ impl GameManager {
                 .collect();
             for &player_id in players.iter() {
                 if let Some(player) = &mut self.players[player_id] {
-                    self.game.print_board();
-                    println!("Player: {}", player_id);
                     let (worker, (move_x, move_y), (build_x, build_y)) =
                         player.get_action(&self.game, player_id);
 
