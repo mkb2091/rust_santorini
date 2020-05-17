@@ -9,7 +9,7 @@ impl ActionScorer for PrioritizeClimbing {
         player_id: usize,
         worker: lib::Worker,
         movement: (u8, u8),
-        build: (u8, u8),
+        _build: (u8, u8),
     ) -> i32 {
         let (w1, w2) = game.player_locations[player_id];
         let old_pos = if worker == lib::Worker::One { w1 } else { w2 };
@@ -24,8 +24,8 @@ impl ActionScorer for PrioritizeCapping {
         &self,
         game: &lib::Game,
         player_id: usize,
-        worker: lib::Worker,
-        movement: (u8, u8),
+        _worker: lib::Worker,
+        _movement: (u8, u8),
         b: (u8, u8),
     ) -> i32 {
         let nearby_player = game.is_nearby_player(player_id, b);
@@ -35,12 +35,10 @@ impl ActionScorer for PrioritizeCapping {
             } else {
                 -1
             }
+        } else if nearby_player {
+            -1
         } else {
-            if nearby_player {
-                -1
-            } else {
-                0
-            }
+            0
         }
     }
 }
@@ -51,8 +49,8 @@ impl ActionScorer for PrioritizeBlocking {
         &self,
         game: &lib::Game,
         player_id: usize,
-        worker: lib::Worker,
-        movement: (u8, u8),
+        _worker: lib::Worker,
+        _movement: (u8, u8),
         b: (u8, u8),
     ) -> i32 {
         let nearby_player = game.is_nearby_player(player_id, b);
@@ -94,7 +92,7 @@ impl ActionScorer for PrioritizeNextToPlayer {
         player_id: usize,
         worker: lib::Worker,
         m: (u8, u8),
-        build: (u8, u8),
+        _build: (u8, u8),
     ) -> i32 {
         let current_locations = game.player_locations[player_id];
         let w = if worker == lib::Worker::One {
@@ -111,12 +109,10 @@ impl ActionScorer for PrioritizeNextToPlayer {
             } else {
                 -1
             }
+        } else if will_be_near_player {
+            1
         } else {
-            if will_be_near_player {
-                1
-            } else {
-                -1
-            }
+            -1
         }
     }
 }

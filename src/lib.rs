@@ -1,12 +1,15 @@
+pub type Action = (Worker, (u8, u8), (u8, u8));
+pub type StartLocation = ((u8, u8), (u8, u8));
+
 pub trait Player {
-    fn get_action(&self, game: &Game, player_id: usize) -> (Worker, (u8, u8), (u8, u8));
+    fn get_action(&self, game: &Game, player_id: usize) -> Action;
 
     fn get_starting_position(
         &self,
 
         game: &Game,
         player_locations: &[((u8, u8), (u8, u8))],
-    ) -> ((u8, u8), (u8, u8));
+    ) -> StartLocation;
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -19,7 +22,7 @@ pub enum TowerStates {
 }
 
 impl TowerStates {
-    pub fn increase(&self) -> Option<Self> {
+    pub fn increase(self) -> Option<Self> {
         match self {
             TowerStates::Empty => Some(TowerStates::Level1),
             TowerStates::Level1 => Some(TowerStates::Level2),
@@ -28,7 +31,7 @@ impl TowerStates {
             TowerStates::Capped => None,
         }
     }
-    pub fn to_int(&self) -> u8 {
+    pub fn to_int(self) -> u8 {
         match self {
             TowerStates::Empty => 0,
             TowerStates::Level1 => 1,
@@ -116,34 +119,16 @@ impl Game {
         } else {
             self.player_locations[player_id].1
         };
-        if (base_worker.0 as i8 - move_x as i8).abs() > 1
-            && (base_worker.1 as i8 - move_y as i8).abs() > 1
-        {
-            // Check for moving more than 1 block
-            return false;
-        } else if (self.board[base_worker.0 as usize][base_worker.1 as usize].to_int() as i8
-            - self.board[move_x as usize][move_y as usize].to_int() as i8)
-            < -1
-        {
-            // Check for moving up more than 1 level
-            return false;
-        } else if self.board[move_x as usize][move_y as usize] == TowerStates::Capped {
-            // Check for moving on to a dome
-            return false;
-        } else if (move_x, move_y) == (build_x, build_y) {
-            // Check for building where moving to
-            return false;
-        } else if (move_x as i8 - build_x as i8).abs() > 1
-            && (move_y as i8 - build_y as i8).abs() > 1
-        {
-            // Check that build location is within 1 block
-            return false;
-        } else if self.board[build_x as usize][build_y as usize] == TowerStates::Capped {
-            // Check player is not trying to build on a dome
-            return false;
-        } else {
-            return true;
-        }
+        !((((base_worker.0 as i8 - move_x as i8).abs() > 1)
+            || ((base_worker.1 as i8 - move_y as i8).abs() > 1))
+            || ((self.board[base_worker.0 as usize][base_worker.1 as usize].to_int() as i8
+                - self.board[move_x as usize][move_y as usize].to_int() as i8)
+                < -1)
+            || (self.board[move_x as usize][move_y as usize] == TowerStates::Capped)
+            || ((move_x, move_y) == (build_x, build_y))
+            || ((move_x as i8 - build_x as i8).abs() > 1
+                && (move_y as i8 - build_y as i8).abs() > 1)
+            || (self.board[build_x as usize][build_y as usize] == TowerStates::Capped))
     }
 
     pub fn print_board(&self) {
@@ -204,8 +189,8 @@ impl Game {
         }
         println!("Game:\n{}", result);
     }
-    pub fn list_possible_actions(&self, player_id: usize) -> Vec<(Worker, (u8, u8), (u8, u8))> {
-        let mut possible_actions: Vec<(Worker, (u8, u8), (u8, u8))> = Vec::new();
+    pub fn list_possible_actions(&self, player_id: usize) -> Vec<Action> {
+        let mut possible_actions: Vec<Action> = Vec::new();
         let (worker1, worker2) = self.player_locations[player_id];
         for &worker in [Worker::One, Worker::Two].iter() {
             let w = if worker == Worker::One {
@@ -234,10 +219,8 @@ impl Game {
                         (m.0 + 1, m.1),
                         (m.0 + 1, m.1 + 1),
                     ] {
-                        if b.0 <= 4 && b.1 <= 4 {
-                            if self.is_valid(player_id, worker, m, b) {
-                                possible_actions.push((worker, m, b));
-                            }
+                        if b.0 <= 4 && b.1 <= 4 && self.is_valid(player_id, worker, m, b) {
+                            possible_actions.push((worker, m, b));
                         }
                     }
                 }
@@ -359,5 +342,5 @@ pub fn main_loop(player_controls: [Option<&dyn Player>; 3]) -> Option<usize> {
             }
         }
     }
-    return None;
+    None
 }

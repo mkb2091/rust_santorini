@@ -1,7 +1,5 @@
 use crate::action_score_algorithms;
-use crate::first_choice_player;
 use crate::lib;
-use crate::random_choice_player;
 use crate::start_location_score_algorithms;
 use rand::prelude::*;
 
@@ -47,7 +45,7 @@ impl StartScorer for StartNearPlayers {
         &self,
         player_locations: &[((u8, u8), (u8, u8))],
         s: (u8, u8),
-        other_starting_location: Option<(u8, u8)>,
+        _other_starting_location: Option<(u8, u8)>,
     ) -> i32 {
         -player_locations
             .iter()
@@ -197,7 +195,7 @@ impl GeneticAI {
     }
 }
 impl lib::Player for GeneticAI {
-    fn get_action(&self, game: &lib::Game, player_id: usize) -> (lib::Worker, (u8, u8), (u8, u8)) {
+    fn get_action(&self, game: &lib::Game, player_id: usize) -> lib::Action {
         *game
             .list_possible_actions(player_id)
             .iter()
@@ -233,7 +231,7 @@ impl lib::Player for GeneticAI {
                 self.get_start_location_score(player_locations, **location, Some(*first_location))
             })
             .unwrap_or(&values[0]);
-        return (*first_location, *second_location);
+        (*first_location, *second_location)
     }
 }
 
@@ -270,7 +268,6 @@ pub fn train(
 ) -> Vec<GeneticAI> {
     let mut ais_for_testing: Vec<Box<(dyn lib::Player)>> = Vec::with_capacity(iterations);
     let mut ais: Vec<GeneticAI> = Vec::with_capacity(iterations);
-    let old_ais_len = ais.len();
     let mut rng = rand::thread_rng();
 
     for iteration in 0..iterations {

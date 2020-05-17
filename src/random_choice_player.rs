@@ -9,7 +9,7 @@ impl RandomChoice {
     }
 }
 impl lib::Player for RandomChoice {
-    fn get_action(&self, game: &lib::Game, player_id: usize) -> (lib::Worker, (u8, u8), (u8, u8)) {
+    fn get_action(&self, game: &lib::Game, player_id: usize) -> lib::Action {
         let mut possible_actions = game.list_possible_actions(player_id);
         if !possible_actions.is_empty() {
             possible_actions.shuffle(&mut rand::thread_rng());
@@ -23,8 +23,8 @@ impl lib::Player for RandomChoice {
         &self,
 
         _: &lib::Game,
-        player_locations: &[((u8, u8), (u8, u8))],
-    ) -> ((u8, u8), (u8, u8)) {
+        player_locations: &[lib::StartLocation],
+    ) -> lib::StartLocation {
         let mut values: Vec<(u8, u8)> = Vec::new();
         for &i in [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (1, 0)].iter() {
             if player_locations
@@ -34,6 +34,6 @@ impl lib::Player for RandomChoice {
                 values.push(i);
             }
         }
-        return (values[0], values[1]);
+        (values[0], values[1])
     }
 }

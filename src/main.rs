@@ -17,7 +17,7 @@ impl RealPlayer {
 }
 
 impl lib::Player for RealPlayer {
-    fn get_action(&self, game: &lib::Game, player_id: usize) -> (lib::Worker, (u8, u8), (u8, u8)) {
+    fn get_action(&self, game: &lib::Game, player_id: usize) -> lib::Action {
         game.print_board();
         println!("Player: {}", player_id);
         loop {
@@ -25,7 +25,7 @@ impl lib::Player for RealPlayer {
                 println!("Enter which worker to select");
                 let mut input = String::new();
                 match std::io::stdin().read_line(&mut input) {
-                    Ok(n) => {}
+                    Ok(_) => {}
                     Err(error) => println!("Error: {}", error),
                 }
                 match &input.trim().to_lowercase() as &str {
@@ -45,7 +45,7 @@ impl lib::Player for RealPlayer {
                 println!("Enter coordinates of where to move worker seperated by a space");
                 let mut input = String::new();
                 match std::io::stdin().read_line(&mut input) {
-                    Ok(n) => {}
+                    Ok(_) => {}
                     Err(error) => println!("Error: {}", error),
                 }
                 let coordinates: Vec<&str> = input.split_whitespace().collect();
@@ -71,7 +71,7 @@ impl lib::Player for RealPlayer {
                 println!("Enter coordinates of where to build seperated by a space");
                 let mut input = String::new();
                 match std::io::stdin().read_line(&mut input) {
-                    Ok(n) => {}
+                    Ok(_) => {}
                     Err(error) => println!("Error: {}", error),
                 }
                 let coordinates: Vec<&str> = input.split_whitespace().collect();
@@ -99,15 +99,15 @@ impl lib::Player for RealPlayer {
     fn get_starting_position(
         &self,
         game: &lib::Game,
-        player_locations: &[((u8, u8), (u8, u8))],
-    ) -> ((u8, u8), (u8, u8)) {
+        player_locations: &[lib::StartLocation],
+    ) -> lib::StartLocation {
         game.print_board();
         loop {
             let w1 = {
                 println!("Enter coordinates of first worker");
                 let mut input = String::new();
                 match std::io::stdin().read_line(&mut input) {
-                    Ok(n) => {}
+                    Ok(_) => {}
                     Err(error) => println!("Error: {}", error),
                 }
                 let coordinates: Vec<&str> = input.split_whitespace().collect();
@@ -139,7 +139,7 @@ impl lib::Player for RealPlayer {
                 println!("Enter coordinates of second worker");
                 let mut input = String::new();
                 match std::io::stdin().read_line(&mut input) {
-                    Ok(n) => {}
+                    Ok(_) => {}
                     Err(error) => println!("Error: {}", error),
                 }
                 let coordinates: Vec<&str> = input.split_whitespace().collect();

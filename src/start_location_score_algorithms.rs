@@ -5,9 +5,9 @@ pub struct StartNearPlayers {}
 impl StartScorer for StartNearPlayers {
     fn get_score(
         &self,
-        player_locations: &[((u8, u8), (u8, u8))],
+        player_locations: &[lib::StartLocation],
         s: (u8, u8),
-        other_starting_location: Option<(u8, u8)>,
+        _other_starting_location: Option<(u8, u8)>,
     ) -> i32 {
         -player_locations
             .iter()
