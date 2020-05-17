@@ -180,8 +180,8 @@ fn main() {
     ];
     let result = genetic_ai::train(players, 50, 1);
     println!("{:?}", result[0]);
-    let player1: Box<(dyn lib::Player)> = Box::new(RealPlayer::new());
-    let player2: Box<(dyn lib::Player)> = Box::new(result[0]);
-    let players: [Option<&Box<(dyn lib::Player)>>; 3] = [Some(&player1), Some(&player2), None];
+    let player1: &dyn lib::Player = &RealPlayer::new();
+    let player2: &dyn lib::Player = &result[0];
+    let players: [Option<&dyn lib::Player>; 3] = [Some(player1), Some(player2), None];
     lib::main_loop(players);
 }

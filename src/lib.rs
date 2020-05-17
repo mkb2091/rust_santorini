@@ -275,7 +275,7 @@ impl Game {
     }
 }
 
-pub fn main_loop(player_controls: [Option<&Box<dyn Player>>; 3]) -> Option<usize> {
+pub fn main_loop(player_controls: [Option<&dyn Player>; 3]) -> Option<usize> {
     let mut game = Game {
         board: [[TowerStates::Empty; 5]; 5],
         player_locations: [((17, 17), (17, 17)); 3],

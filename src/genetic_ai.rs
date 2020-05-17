@@ -237,14 +237,10 @@ impl lib::Player for GeneticAI {
     }
 }
 
-fn compare_ai(
-    ai1: &Box<(dyn lib::Player)>,
-    ai2: &Box<(dyn lib::Player)>,
-    matches: usize,
-) -> (usize, usize) {
+fn compare_ai(ai1: &dyn lib::Player, ai2: &dyn lib::Player, matches: usize) -> (usize, usize) {
     let mut scores = (0, 0);
     for _ in 0..matches {
-        let players: [Option<&Box<(dyn lib::Player)>>; 3] = [Some(ai1), Some(ai2), None];
+        let players: [Option<&dyn lib::Player>; 3] = [Some(ai2), Some(ai1), None];
         let result = lib::main_loop(players);
         if let Some(result) = result {
             if result == 0 {
@@ -254,7 +250,7 @@ fn compare_ai(
             }
         }
 
-        let players: [Option<&Box<(dyn lib::Player)>>; 3] = [Some(ai2), Some(ai1), None];
+        let players: [Option<&dyn lib::Player>; 3] = [Some(ai2), Some(ai1), None];
         let result = lib::main_loop(players);
         if let Some(result) = result {
             if result == 0 {
@@ -282,10 +278,7 @@ pub fn train(
         let mut old_score: usize = players
             .iter()
             .chain(ais_for_testing.iter())
-            .map(|ai| {
-                let tmp_ai: Box<(dyn lib::Player)> = Box::new(old_ai);
-                compare_ai(&tmp_ai, ai, matches).0
-            })
+            .map(|ai| compare_ai(&old_ai, &**ai, matches).0)
             .sum();
         let mut generations: usize = 0;
         loop {
@@ -298,10 +291,7 @@ pub fn train(
                         players
                             .iter()
                             .chain(ais_for_testing.iter())
-                            .map(|ai| {
-                                let tmp_ai: Box<(dyn lib::Player)> = Box::new(*new_ai);
-                                compare_ai(&tmp_ai, ai, matches).0
-                            })
+                            .map(|ai| compare_ai(new_ai, &**ai, matches).0)
                             .sum::<usize>(),
                     )
                 })
