@@ -4,8 +4,8 @@ use crate::start_location_score_algorithms;
 use rand::prelude::*;
 
 const GENE_COUNT: usize = 4;
-const START_LOCATION_GENE_COUNT: usize = 1;
-const TOTAL_PERMUTATIONS: usize = 3 * 3 * 3 * 3 * 3 - 1;
+const START_LOCATION_GENE_COUNT: usize = 2;
+const TOTAL_PERMUTATIONS: usize = 3 * 3 * 3 * 3 * 3 * 3 - 1;
 lazy_static! {
     static ref GENES: [std::sync::Arc<dyn ActionScorer>; GENE_COUNT] = [
         std::sync::Arc::new(action_score_algorithms::PrioritizeClimbing {}),
@@ -13,10 +13,10 @@ lazy_static! {
         std::sync::Arc::new(action_score_algorithms::PrioritizeBlocking {}),
         std::sync::Arc::new(action_score_algorithms::PrioritizeNextToPlayer {}),
     ];
-    static ref START_LOCATION_GENES: [std::sync::Arc<dyn StartScorer>; START_LOCATION_GENE_COUNT] =
-        [std::sync::Arc::new(
-            start_location_score_algorithms::StartNearPlayers {}
-        ),];
+    static ref START_LOCATION_GENES: [std::sync::Arc<dyn StartScorer>; START_LOCATION_GENE_COUNT] = [
+        std::sync::Arc::new(start_location_score_algorithms::StartNearPlayers {}),
+        std::sync::Arc::new(start_location_score_algorithms::StartNearMiddle {}),
+    ];
 }
 
 pub trait ActionScorer: Sync + Send {
@@ -39,28 +39,6 @@ pub trait StartScorer: Sync + Send {
     ) -> i32;
 }
 
-struct StartNearPlayers {}
-impl StartScorer for StartNearPlayers {
-    fn get_score(
-        &self,
-        player_locations: &[((u8, u8), (u8, u8))],
-        s: (u8, u8),
-        _other_starting_location: Option<(u8, u8)>,
-    ) -> i32 {
-        -player_locations
-            .iter()
-            .map(|(w1, w2)| {
-                ((w1.0 as i8 - s.0 as i8)
-                    .abs()
-                    .max((w1.1 as i8 - s.1 as i8).abs())
-                    + (w2.0 as i8 - s.0 as i8)
-                        .abs()
-                        .max((w2.1 as i8 - s.1 as i8).abs())) as i32
-            })
-            .sum::<i32>()
-    }
-}
-
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub struct GeneticAI {
     pub gene_weighting: [u16; GENE_COUNT],
@@ -72,7 +50,7 @@ impl GeneticAI {
     pub fn new() -> Self {
         Self {
             gene_weighting: [0, 0, 0, 0],
-            start_location_gene_weighting: [0],
+            start_location_gene_weighting: [0, 0],
         }
     }
 }
@@ -130,7 +108,7 @@ impl GeneticAI {
             rng.gen_range(0, 10),
             rng.gen_range(0, 10),
         ];
-        let start_location_gene_weighting = [rng.gen()];
+        let start_location_gene_weighting = [rng.gen_range(0, 10), rng.gen_range(0, 10)];
         Self {
             gene_weighting,
             start_location_gene_weighting,
@@ -178,13 +156,21 @@ impl GeneticAI {
                         ]
                         .iter()
                         {
-                            let new = Self {
-                                gene_weighting: [*g0, *g1, *g2, *g3],
-                                start_location_gene_weighting: [*gsl0],
-                            };
-                            if *self != new {
-                                altered[index] = new;
-                                index += 1;
+                            for gsl1 in [
+                                gsl[1].saturating_sub(amount),
+                                gsl[1],
+                                gsl[1].saturating_add(amount),
+                            ]
+                            .iter()
+                            {
+                                let new = Self {
+                                    gene_weighting: [*g0, *g1, *g2, *g3],
+                                    start_location_gene_weighting: [*gsl0, *gsl1],
+                                };
+                                if *self != new {
+                                    altered[index] = new;
+                                    index += 1;
+                                }
                             }
                         }
                     }

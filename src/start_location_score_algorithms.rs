@@ -22,3 +22,15 @@ impl StartScorer for StartNearPlayers {
             .sum::<i32>()
     }
 }
+
+pub struct StartNearMiddle {}
+impl StartScorer for StartNearMiddle {
+    fn get_score(
+        &self,
+        _player_locations: &[lib::StartLocation],
+        s: (u8, u8),
+        _other_starting_location: Option<(u8, u8)>,
+    ) -> i32 {
+        -(s.0 as i8 - 2).max(s.1 as i8 - 2).abs() as i32
+    }
+}

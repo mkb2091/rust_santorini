@@ -76,9 +76,9 @@ impl ActionScorer for PrioritizeBlocking {
 
             let current_height = game.board[b.0 as usize][b.1 as usize].to_int();
             match current_height.cmp(&max_near_height) {
-                std::cmp::Ordering::Less => 0,
-                std::cmp::Ordering::Equal => 1,
-                std::cmp::Ordering::Greater => 2,
+                std::cmp::Ordering::Less => -2,
+                std::cmp::Ordering::Equal => -1,
+                std::cmp::Ordering::Greater => 1,
             }
         }
     }

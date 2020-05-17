@@ -205,6 +205,16 @@ fn main() {
         Box::new(first_choice_player::FirstChoice::new()),
     ];
     let result = genetic_ai::train(players, 50, 1);
+    println!(
+        "{:?}",
+        result
+            .iter()
+            .map(|x| (x.gene_weighting, x.start_location_gene_weighting))
+            .fold(((0, 0, 0, 0), (0, 0)), |a, x| (
+                ((a.0).0 + (x.0)[0], (a.0).1 + (x.0)[1], (a.0).2 + (x.0)[2], (a.0).3 + (x.0)[3]),
+                ((a.1).0 + (x.1)[0], (a.1).1 + (x.1)[1])
+            ))
+    );
     println!("{:?}", result[0]);
     let player2: &dyn lib::Player = &RealPlayer::new();
     let player1: &dyn lib::Player = &result[0];

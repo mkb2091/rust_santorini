@@ -187,7 +187,7 @@ impl Game {
             result.push('\n');
             result.push('\n');
         }
-        println!("Game:\n{}", result);
+        println!("Levels: ◌○◍◉●\nGame:\n{}", result);
     }
     pub fn list_possible_actions(&self, player_id: usize) -> Vec<Action> {
         let mut possible_actions: Vec<Action> = Vec::new();
