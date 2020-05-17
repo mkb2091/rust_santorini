@@ -1,10 +1,13 @@
-use crate::lib;
 use crate::action_score_algorithms;
+use crate::first_choice_player;
+use crate::lib;
+use crate::random_choice_player;
 use crate::start_location_score_algorithms;
 use rand::prelude::*;
 
 const GENE_COUNT: usize = 3;
 const START_LOCATION_GENE_COUNT: usize = 1;
+const TOTAL_PERMUTATIONS: usize = 3 * 3 * 3 * 2;
 lazy_static! {
     static ref GENES: [std::sync::Arc<dyn ActionScorer>; GENE_COUNT] = [
         std::sync::Arc::new(action_score_algorithms::PrioritizeClimbing {}),
@@ -12,7 +15,9 @@ lazy_static! {
         std::sync::Arc::new(action_score_algorithms::PrioritizeBlocking {}),
     ];
     static ref START_LOCATION_GENES: [std::sync::Arc<dyn StartScorer>; START_LOCATION_GENE_COUNT] =
-        [std::sync::Arc::new(start_location_score_algorithms::StartNearPlayers {}),];
+        [std::sync::Arc::new(
+            start_location_score_algorithms::StartNearPlayers {}
+        ),];
 }
 
 pub trait ActionScorer: Sync + Send {
@@ -57,8 +62,6 @@ impl StartScorer for StartNearPlayers {
     }
 }
 
-
-
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub struct GeneticAI {
     pub gene_weighting: [u16; GENE_COUNT],
@@ -77,7 +80,7 @@ impl GeneticAI {
 
 impl GeneticAI {
     fn get_score(
-        &mut self,
+        &self,
         game: &lib::Game,
         player_id: usize,
         worker: lib::Worker,
@@ -94,7 +97,7 @@ impl GeneticAI {
     }
 
     fn get_start_location_score(
-        &mut self,
+        &self,
         player_locations: &[((u8, u8), (u8, u8))],
         start_locations: (u8, u8),
         other_starting_location: Option<(u8, u8)>,
@@ -121,33 +124,40 @@ impl GeneticAI {
             }
         }
     }**/
-
-    fn create_altered(&self, rng: &mut rand::rngs::ThreadRng) -> Self {
-        let gene_weighting = {
-            let mut gene_weighting = self.gene_weighting.clone();
-            let index = rng.gen_range(0, gene_weighting.len());
-            gene_weighting[index] = gene_weighting[index].saturating_sub(1) + rng.gen_range(0, 2);
-            gene_weighting
-        };
-        let start_location_gene_weighting = {
-            let mut start_location_gene_weighting = self.start_location_gene_weighting.clone();
-            let index = rng.gen_range(0, start_location_gene_weighting.len());
-            start_location_gene_weighting[index] =
-                start_location_gene_weighting[index].saturating_sub(1) + rng.gen_range(0, 2);
-            start_location_gene_weighting
-        };
+    fn create_random(rng: &mut rand::rngs::ThreadRng) -> Self {
+        let gene_weighting = [rng.gen(), rng.gen(), rng.gen()];
+        let start_location_gene_weighting = [rng.gen()];
         Self {
             gene_weighting,
             start_location_gene_weighting,
         }
     }
+
+    fn create_altered(&self) -> [Self; TOTAL_PERMUTATIONS] {
+        let mut altered = [*self; TOTAL_PERMUTATIONS];
+        let g = self.gene_weighting;
+        let gsl = self.start_location_gene_weighting;
+        let index = 0;
+        for g0 in [g[0].saturating_sub(1), g[0], g[0].saturating_add(1)].iter() {
+            for g1 in [g[1].saturating_sub(1), g[1], g[1].saturating_add(1)].iter() {
+                for g2 in [g[2].saturating_sub(1), g[2], g[2].saturating_add(1)].iter() {
+                    for gsl0 in [gsl[0].saturating_sub(1), gsl[0], gsl[0].saturating_add(1)].iter()
+                    {
+                        if *g0 != g[0] && *g1 != g[1] && *g2 != g[2] && *gsl0 != gsl[0] {
+                            altered[index] = Self {
+                                gene_weighting: [*g0, *g1, *g2],
+                                start_location_gene_weighting: [*gsl0],
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        altered
+    }
 }
 impl lib::Player for GeneticAI {
-    fn get_action(
-        &mut self,
-        game: &lib::Game,
-        player_id: usize,
-    ) -> (lib::Worker, (u8, u8), (u8, u8)) {
+    fn get_action(&self, game: &lib::Game, player_id: usize) -> (lib::Worker, (u8, u8), (u8, u8)) {
         *game
             .list_possible_actions(player_id)
             .iter()
@@ -157,8 +167,7 @@ impl lib::Player for GeneticAI {
             .unwrap_or(&(lib::Worker::One, (0, 0), (0, 0)))
     }
     fn get_starting_position(
-        &mut self,
-
+        &self,
         _: &lib::Game,
         player_locations: &[((u8, u8), (u8, u8))],
     ) -> ((u8, u8), (u8, u8)) {
@@ -188,50 +197,90 @@ impl lib::Player for GeneticAI {
     }
 }
 
+fn compare_ai(
+    ai1: &Box<(dyn lib::Player)>,
+    ai2: &Box<(dyn lib::Player)>,
+    matches: usize,
+) -> (usize, usize) {
+    let mut scores = (0, 0);
+    for _ in 0..matches {
+        let players: [Option<&Box<(dyn lib::Player)>>; 3] = [Some(ai1), Some(ai2), None];
+        let result = lib::main_loop(players);
+        if let Some(result) = result {
+            if result == 0 {
+                scores.0 += 1
+            } else {
+                scores.1 += 1
+            }
+        }
+
+        let players: [Option<&Box<(dyn lib::Player)>>; 3] = [Some(ai2), Some(ai1), None];
+        let result = lib::main_loop(players);
+        if let Some(result) = result {
+            if result == 0 {
+                scores.1 += 1
+            } else {
+                scores.0 += 1
+            }
+        }
+    }
+    scores
+}
+
 pub fn train(
-    base: Vec<GeneticAI>,
-    max_length: usize,
+    players: Vec<Box<(dyn lib::Player)>>,
     iterations: usize,
     matches: usize,
 ) -> Vec<GeneticAI> {
-    let mut ais = base.clone();
+    let mut ais_for_testing: Vec<Box<(dyn lib::Player)>> = Vec::with_capacity(iterations);
+    let mut ais: Vec<GeneticAI> = Vec::with_capacity(iterations);
+    let old_ais_len = ais.len();
     let mut rng = rand::thread_rng();
+
     for iteration in 0..iterations {
-        println!("Training iteration: {}", iteration);
-        let mut new: Vec<GeneticAI> = ais.iter().map(|ai| ai.create_altered(&mut rng)).collect();
-        let (mut old_scores, mut new_scores) =
-            (Vec::with_capacity(ais.len()), Vec::with_capacity(ais.len()));
-        for _ in 0..ais.len() {
-            old_scores.push(0);
-            new_scores.push(0);
-        }
-        for (i1, ai1) in ais.iter().enumerate() {
-            for (i2, ai2) in new.iter().enumerate() {
-                for _ in 0..matches {
-                    let players: [Option<Box<(dyn lib::Player)>>; 3] =
-                        [Some(Box::new(*ai1)), Some(Box::new(*ai2)), None];
-                    let result = lib::GameManager::new(players).main_loop();
-                    if let Some(result) = result {
-                        if result == 0 {
-                            old_scores[i1] += 1
-                        } else {
-                            new_scores[i2] += 1
-                        }
-                    }
-                }
+        let mut old_ai = GeneticAI::create_random(&mut rng);
+        let mut old_score: usize = players
+            .iter()
+            .chain(ais_for_testing.iter())
+            .map(|ai| {
+                let tmp_ai: Box<(dyn lib::Player)> = Box::new(old_ai);
+                compare_ai(&tmp_ai, ai, matches).0
+            })
+            .sum();
+        let mut generations: usize = 0;
+        loop {
+            let altered = old_ai.create_altered();
+            if let Some((better_ai, better_score)) = altered
+                .iter()
+                .map(|new_ai| {
+                    (
+                        new_ai,
+                        players
+                            .iter()
+                            .chain(ais_for_testing.iter())
+                            .map(|ai| {
+                                let tmp_ai: Box<(dyn lib::Player)> = Box::new(*new_ai);
+                                compare_ai(&tmp_ai, ai, matches).0
+                            })
+                            .sum::<usize>(),
+                    )
+                })
+                .filter(|(_, score)| *score > old_score)
+                .max_by_key(|(_, score)| *score)
+            {
+                old_score = better_score;
+                old_ai = *better_ai;
+                generations += 1;
+            } else {
+                ais_for_testing.push(Box::new(old_ai));
+                ais.push(old_ai);
+                break;
             }
         }
-        let mut total: Vec<(GeneticAI, usize)> = ais
-            .into_iter()
-            .zip(old_scores.into_iter())
-            .chain(new.into_iter().zip(new_scores.into_iter()))
-            .collect();
-        total.sort_unstable_by_key(|(_, score)| *score);
-        ais = total
-            .into_iter()
-            .map(|(ai, _)| ai)
-            .take(max_length)
-            .collect();
+        println!(
+            "New score {} at iteration {} after {} generations",
+            old_score, iteration, generations
+        );
     }
     ais
 }

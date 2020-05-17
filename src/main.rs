@@ -1,10 +1,9 @@
+mod action_score_algorithms;
 mod first_choice_player;
 mod genetic_ai;
 mod lib;
 mod random_choice_player;
-mod action_score_algorithms;
 mod start_location_score_algorithms;
-
 
 #[macro_use]
 extern crate lazy_static;
@@ -18,11 +17,7 @@ impl RealPlayer {
 }
 
 impl lib::Player for RealPlayer {
-    fn get_action(
-        &mut self,
-        game: &lib::Game,
-        player_id: usize,
-    ) -> (lib::Worker, (u8, u8), (u8, u8)) {
+    fn get_action(&self, game: &lib::Game, player_id: usize) -> (lib::Worker, (u8, u8), (u8, u8)) {
         game.print_board();
         println!("Player: {}", player_id);
         loop {
@@ -102,7 +97,7 @@ impl lib::Player for RealPlayer {
         }
     }
     fn get_starting_position(
-        &mut self,
+        &self,
         game: &lib::Game,
         player_locations: &[((u8, u8), (u8, u8))],
     ) -> ((u8, u8), (u8, u8)) {
@@ -179,13 +174,14 @@ impl lib::Player for RealPlayer {
 
 fn main() {
     //let player1 = RealPlayer::new();
-    let players = [genetic_ai::GeneticAI::new(); 100];
-    let result = genetic_ai::train(players.to_vec(), 50, 10, 1);
+    let players: Vec<Box<(dyn lib::Player)>> = vec![
+        //Box::new(random_choice_player::RandomChoice::new()),
+        Box::new(first_choice_player::FirstChoice::new()),
+    ];
+    let result = genetic_ai::train(players, 1000, 1);
     println!("{:?}", result[0]);
-    let player1 = RealPlayer::new();
-    let player2 = result[0];
-    let players: [Option<Box<(dyn lib::Player)>>; 3] =
-        [Some(Box::new(player1)), Some(Box::new(player2)), None];
-    let mut game = lib::GameManager::new(players);
-    game.main_loop();
+    let player1: Box<(dyn lib::Player)> = Box::new(RealPlayer::new());
+    let player2: Box<(dyn lib::Player)> = Box::new(result[0]);
+    let players: [Option<&Box<(dyn lib::Player)>>; 3] = [Some(&player1), Some(&player2), None];
+    lib::main_loop(players);
 }

@@ -1,8 +1,8 @@
 pub trait Player {
-    fn get_action(&mut self, game: &Game, player_id: usize) -> (Worker, (u8, u8), (u8, u8));
+    fn get_action(&self, game: &Game, player_id: usize) -> (Worker, (u8, u8), (u8, u8));
 
     fn get_starting_position(
-        &mut self,
+        &self,
 
         game: &Game,
         player_locations: &[((u8, u8), (u8, u8))],
@@ -247,33 +247,57 @@ impl Game {
     }
 }
 
-pub struct GameManager {
-    game: Game,
-    players: [Option<Box<dyn Player>>; 3],
-}
-
-impl GameManager {
-    pub fn new(players: [Option<Box<dyn Player>>; 3]) -> Self {
-        let mut player_statuses = [Status::Dead; 3];
-        for (i, player) in players.iter().enumerate() {
-            if player.is_some() {
-                player_statuses[i] = Status::Playing;
+pub fn main_loop(player_controls: [Option<&Box<dyn Player>>; 3]) -> Option<usize> {
+    let mut game = Game {
+        board: [[TowerStates::Empty; 5]; 5],
+        player_locations: [((17, 17), (17, 17)); 3],
+        player_statuses: {
+            let mut player_statuses = [Status::Dead; 3];
+            for (i, player) in player_controls.iter().enumerate() {
+                if player.is_some() {
+                    player_statuses[i] = Status::Playing;
+                }
             }
-        }
-        Self {
-            players,
-            game: Game {
-                board: [[TowerStates::Empty; 5]; 5],
-                player_locations: [((17, 17), (17, 17)); 3],
-                player_statuses,
-            },
+            player_statuses
+        },
+    };
+    let mut start_locations: Vec<((u8, u8), (u8, u8))> = Vec::new();
+    let players: Vec<usize> = game
+        .player_statuses
+        .iter()
+        .enumerate()
+        .filter(|(_, &status)| status == Status::Playing)
+        .map(|(i, _)| i)
+        .collect();
+    for &player_id in players.iter() {
+        if let Some(player) = &player_controls[player_id] {
+            loop {
+                let (w1, w2) = player.get_starting_position(&game, &start_locations);
+                if w1 != w2
+                    && start_locations
+                        .iter()
+                        .all(|&(val1, val2)| w1 != val1 && w2 != val2 && w1 != val2 && w2 != val2)
+                    && w1.0 <= 4
+                    && w1.1 <= 4
+                    && w2.0 <= 4
+                    && w2.1 <= 4
+                {
+                    start_locations.push((w1, w2));
+                    game.player_locations[player_id] = (w1, w2);
+                    break;
+                } else {
+                    println!("Failed to enter valid start location: ({:?}, {:?})", w1, w2);
+                }
+            }
         }
     }
 
-    pub fn main_loop(&mut self) -> Option<usize> {
-        let mut start_locations: Vec<((u8, u8), (u8, u8))> = Vec::new();
-        let players: Vec<usize> = self
-            .game
+    while game
+        .player_statuses
+        .iter()
+        .any(|&status| status == Status::Playing)
+    {
+        let players: Vec<usize> = game
             .player_statuses
             .iter()
             .enumerate()
@@ -281,75 +305,31 @@ impl GameManager {
             .map(|(i, _)| i)
             .collect();
         for &player_id in players.iter() {
-            if let Some(player) = &mut self.players[player_id] {
-                loop {
-                    let (w1, w2) = player.get_starting_position(&self.game, &start_locations);
-                    if w1 != w2
-                        && start_locations.iter().all(|&(val1, val2)| {
-                            w1 != val1 && w2 != val2 && w1 != val2 && w2 != val2
-                        })
-                        && w1.0 <= 4
-                        && w1.1 <= 4
-                        && w2.0 <= 4
-                        && w2.1 <= 4
-                    {
-                        start_locations.push((w1, w2));
-                        self.game.player_locations[player_id] = (w1, w2);
-                        break;
-                    } else {
-                        println!("Failed to enter valid start location: ({:?}, {:?})", w1, w2);
+            if let Some(player) = &player_controls[player_id] {
+                let (worker, (move_x, move_y), (build_x, build_y)) =
+                    player.get_action(&game, player_id);
+
+                if game.is_valid(player_id, worker, (move_x, move_y), (build_x, build_y)) {
+                    if game.board[move_x as usize][move_y as usize] == TowerStates::Level3 {
+                        //println!("Player {} won", player_id);
+                        //self.game.print_board();
+                        return Some(player_id);
                     }
+                    if worker == Worker::One {
+                        game.player_locations[player_id].0 = (move_x, move_y);
+                    } else {
+                        game.player_locations[player_id].1 = (move_x, move_y);
+                    }
+
+                    if let Some(new) = game.board[build_x as usize][build_y as usize].increase() {
+                        game.board[build_x as usize][build_y as usize] = new;
+                    }
+                } else {
+                    //println!("Not a valid move");
+                    game.player_statuses[player_id] = Status::Dead;
                 }
             }
         }
-
-        while self
-            .game
-            .player_statuses
-            .iter()
-            .any(|&status| status == Status::Playing)
-        {
-            let players: Vec<usize> = self
-                .game
-                .player_statuses
-                .iter()
-                .enumerate()
-                .filter(|(_, &status)| status == Status::Playing)
-                .map(|(i, _)| i)
-                .collect();
-            for &player_id in players.iter() {
-                if let Some(player) = &mut self.players[player_id] {
-                    let (worker, (move_x, move_y), (build_x, build_y)) =
-                        player.get_action(&self.game, player_id);
-
-                    if self
-                        .game
-                        .is_valid(player_id, worker, (move_x, move_y), (build_x, build_y))
-                    {
-                        if self.game.board[move_x as usize][move_y as usize] == TowerStates::Level3
-                        {
-                            //println!("Player {} won", player_id);
-                            //self.game.print_board();
-                            return Some(player_id);
-                        }
-                        if worker == Worker::One {
-                            self.game.player_locations[player_id].0 = (move_x, move_y);
-                        } else {
-                            self.game.player_locations[player_id].1 = (move_x, move_y);
-                        }
-
-                        if let Some(new) =
-                            self.game.board[build_x as usize][build_y as usize].increase()
-                        {
-                            self.game.board[build_x as usize][build_y as usize] = new;
-                        }
-                    } else {
-                        //println!("Not a valid move");
-                        self.game.player_statuses[player_id] = Status::Dead;
-                    }
-                }
-            }
-        }
-        return None;
     }
+    return None;
 }
