@@ -299,18 +299,18 @@ pub fn train(
                 old_ai = *better_ai;
                 generations += 1;
             } else {
-                if old_score > (players.len() + ais.len()) / 2 {
-                    ais_for_testing.push(Box::new(old_ai));
+                let accepted = old_score >= (players.len() + ais.len()) * matches;
+                println!(
+                    "{} new score {} (out of {}) at iteration {} after {} generations",
+                    if accepted { "Accepted" } else { "Rejected" },
+                    old_score,
+                    (players.len() + ais.len()) * matches * 2,
+                    iteration,
+                    generations
+                );
+                if accepted {
+                ais_for_testing.push(Box::new(old_ai));
                     ais.push(old_ai);
-                    println!(
-                        "Accepted new score {} at iteration {} after {} generations",
-                        old_score, iteration, generations
-                    );
-                } else {
-                    println!(
-                        "Rejected new score {} at iteration {} after {} generations",
-                        old_score, iteration, generations
-                    );
                 }
                 break;
             }
