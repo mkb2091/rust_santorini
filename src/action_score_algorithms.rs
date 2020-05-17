@@ -81,3 +81,55 @@ impl ActionScorer for PrioritizeBlocking {
         }
     }
 }
+
+pub struct PrioritizeNextToPlayer {}
+impl ActionScorer for PrioritizeNextToPlayer {
+    fn get_score(
+        &self,
+        game: &lib::Game,
+        player_id: usize,
+        worker: lib::Worker,
+        m: (u8, u8),
+        build: (u8, u8),
+    ) -> i32 {
+        let current_locations = game.player_locations[player_id];
+        let w = if worker == lib::Worker::One {
+            current_locations.0
+        } else {
+            current_locations.1
+        };
+        let mut nearby_player = false;
+        for (player, (w1, w2)) in game.player_locations.iter().enumerate() {
+            if player != player_id {
+                for &ow in &[w1, w2] {
+                    if (ow.0 as i8 - w.0 as i8).abs() <= 1 && (ow.1 as i8 - w.1 as i8).abs() <= 1 {
+                        nearby_player = true;
+                    }
+                }
+            }
+        }
+        let mut will_be_near_player = false;
+        for (player, (w1, w2)) in game.player_locations.iter().enumerate() {
+            if player != player_id {
+                for &ow in &[w1, w2] {
+                    if (ow.0 as i8 - m.0 as i8).abs() <= 1 && (ow.1 as i8 - m.1 as i8).abs() <= 1 {
+                        will_be_near_player = true;
+                    }
+                }
+            }
+        }
+        if nearby_player {
+            if will_be_near_player {
+                0
+            } else {
+                -1
+            }
+        } else {
+            if will_be_near_player {
+                1
+            } else {
+                -1
+            }
+        }
+    }
+}

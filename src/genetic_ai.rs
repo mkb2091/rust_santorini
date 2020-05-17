@@ -5,14 +5,15 @@ use crate::random_choice_player;
 use crate::start_location_score_algorithms;
 use rand::prelude::*;
 
-const GENE_COUNT: usize = 3;
+const GENE_COUNT: usize = 4;
 const START_LOCATION_GENE_COUNT: usize = 1;
-const TOTAL_PERMUTATIONS: usize = 3 * 3 * 3 * 2;
+const TOTAL_PERMUTATIONS: usize = 3 * 3 * 3 * 3 * 3 - 1;
 lazy_static! {
     static ref GENES: [std::sync::Arc<dyn ActionScorer>; GENE_COUNT] = [
         std::sync::Arc::new(action_score_algorithms::PrioritizeClimbing {}),
         std::sync::Arc::new(action_score_algorithms::PrioritizeCapping {}),
         std::sync::Arc::new(action_score_algorithms::PrioritizeBlocking {}),
+        std::sync::Arc::new(action_score_algorithms::PrioritizeNextToPlayer {}),
     ];
     static ref START_LOCATION_GENES: [std::sync::Arc<dyn StartScorer>; START_LOCATION_GENE_COUNT] =
         [std::sync::Arc::new(
@@ -72,7 +73,7 @@ pub struct GeneticAI {
 impl GeneticAI {
     pub fn new() -> Self {
         Self {
-            gene_weighting: [0, 0, 0],
+            gene_weighting: [0, 0, 0, 0],
             start_location_gene_weighting: [0],
         }
     }
@@ -125,7 +126,12 @@ impl GeneticAI {
         }
     }**/
     fn create_random(rng: &mut rand::rngs::ThreadRng) -> Self {
-        let gene_weighting = [rng.gen(), rng.gen(), rng.gen()];
+        let gene_weighting = [
+            rng.gen_range(0, 10),
+            rng.gen_range(0, 10),
+            rng.gen_range(0, 10),
+            rng.gen_range(0, 10),
+        ];
         let start_location_gene_weighting = [rng.gen()];
         Self {
             gene_weighting,
@@ -134,19 +140,53 @@ impl GeneticAI {
     }
 
     fn create_altered(&self) -> [Self; TOTAL_PERMUTATIONS] {
+        let amount: u16 = 1;
         let mut altered = [*self; TOTAL_PERMUTATIONS];
         let g = self.gene_weighting;
         let gsl = self.start_location_gene_weighting;
-        let index = 0;
-        for g0 in [g[0].saturating_sub(1), g[0], g[0].saturating_add(1)].iter() {
-            for g1 in [g[1].saturating_sub(1), g[1], g[1].saturating_add(1)].iter() {
-                for g2 in [g[2].saturating_sub(1), g[2], g[2].saturating_add(1)].iter() {
-                    for gsl0 in [gsl[0].saturating_sub(1), gsl[0], gsl[0].saturating_add(1)].iter()
+        let mut index = 0;
+        for g0 in [
+            g[0].saturating_sub(amount),
+            g[0],
+            g[0].saturating_add(amount),
+        ]
+        .iter()
+        {
+            for g1 in [
+                g[1].saturating_sub(amount),
+                g[1],
+                g[1].saturating_add(amount),
+            ]
+            .iter()
+            {
+                for g2 in [
+                    g[2].saturating_sub(amount),
+                    g[2],
+                    g[2].saturating_add(amount),
+                ]
+                .iter()
+                {
+                    for g3 in [
+                        g[3].saturating_sub(amount),
+                        g[3],
+                        g[3].saturating_add(amount),
+                    ]
+                    .iter()
                     {
-                        if *g0 != g[0] && *g1 != g[1] && *g2 != g[2] && *gsl0 != gsl[0] {
-                            altered[index] = Self {
-                                gene_weighting: [*g0, *g1, *g2],
+                        for gsl0 in [
+                            gsl[0].saturating_sub(amount),
+                            gsl[0],
+                            gsl[0].saturating_add(amount),
+                        ]
+                        .iter()
+                        {
+                            let new = Self {
+                                gene_weighting: [*g0, *g1, *g2, *g3],
                                 start_location_gene_weighting: [*gsl0],
+                            };
+                            if *self != new {
+                                altered[index] = new;
+                                index += 1;
                             }
                         }
                     }
