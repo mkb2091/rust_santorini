@@ -20,6 +20,11 @@ impl lib::Player for RealPlayer {
     fn get_action(&self, game: &lib::Game, player_id: usize) -> lib::Action {
         game.print_board();
         println!("Player: {}", player_id);
+        let possible_actions = game.list_possible_actions(player_id);
+        if possible_actions.is_empty() {
+            println!("No possible moves left");
+            return (lib::Worker::One, (0, 0), (0, 0));
+        }
         loop {
             let worker: lib::Worker = {
                 println!("Enter which worker to select");
@@ -41,6 +46,10 @@ impl lib::Player for RealPlayer {
                     }
                 }
             };
+            if !possible_actions.iter().any(|(w, _, _)| *w == worker) {
+                println!("No possible moves with the chosen worker");
+                continue;
+            }
             let (move_x, move_y) = {
                 println!("Enter coordinates of where to move worker seperated by a space");
                 let mut input = String::new();
@@ -67,6 +76,13 @@ impl lib::Player for RealPlayer {
                     (x, y)
                 }
             };
+            if !possible_actions
+                .iter()
+                .any(|(w, m, _)| (*w, *m) == (worker, (move_x, move_y)))
+            {
+                println!("Worker cannot move to the chosen square");
+                continue;
+            }
             let (build_x, build_y) = {
                 println!("Enter coordinates of where to build seperated by a space");
                 let mut input = String::new();
@@ -93,6 +109,16 @@ impl lib::Player for RealPlayer {
                     (x, y)
                 }
             };
+
+            if !possible_actions
+                .iter()
+                .any(|(w, m, b)| (*w, *m, *b) == (worker, (move_x, move_y), (build_x, build_y)))
+            {
+                println!(
+                    "Worker cannot move to the chosen square and then build at the chosen square"
+                );
+                continue;
+            }
             return (worker, (move_x, move_y), (build_x, build_y));
         }
     }
@@ -180,8 +206,10 @@ fn main() {
     ];
     let result = genetic_ai::train(players, 50, 1);
     println!("{:?}", result[0]);
-    let player1: &dyn lib::Player = &RealPlayer::new();
-    let player2: &dyn lib::Player = &result[0];
+    let player2: &dyn lib::Player = &RealPlayer::new();
+    let player1: &dyn lib::Player = &result[0];
     let players: [Option<&dyn lib::Player>; 3] = [Some(player1), Some(player2), None];
-    lib::main_loop(players);
+    if let Some(result) = lib::main_loop(players) {
+        println!("Player {} won the game", result);
+    }
 }

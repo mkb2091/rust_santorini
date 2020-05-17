@@ -309,7 +309,7 @@ pub fn train(
                     generations
                 );
                 if accepted {
-                ais_for_testing.push(Box::new(old_ai));
+                    ais_for_testing.push(Box::new(old_ai));
                     ais.push(old_ai);
                 }
                 break;
