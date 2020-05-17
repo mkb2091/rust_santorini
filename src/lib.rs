@@ -214,22 +214,22 @@ impl Game {
                 worker2
             };
             for &m in &[
-                (w.0 - 1, w.1 - 1),
-                (w.0, w.1 - 1),
-                (w.0 + 1, w.1 - 1),
-                (w.0 - 1, w.1),
-                (w.0 - 1, w.1 + 1),
+                (w.0.wrapping_sub(1), w.1.wrapping_sub(1)),
+                (w.0, w.1.wrapping_sub(1)),
+                (w.0 + 1, w.1.wrapping_sub(1)),
+                (w.0.wrapping_sub(1), w.1),
+                (w.0.wrapping_sub(1), w.1 + 1),
                 (w.0, w.1 + 1),
                 (w.0 + 1, w.1),
                 (w.0 + 1, w.1 + 1),
             ] {
                 if m.0 <= 4 && m.1 <= 4 {
                     for &b in &[
-                        (m.0 - 1, m.1 - 1),
-                        (m.0, m.1 - 1),
-                        (m.0 + 1, m.1 - 1),
-                        (m.0 - 1, m.1),
-                        (m.0 - 1, m.1 + 1),
+                        (m.0.wrapping_sub(1), m.1.wrapping_sub(1)),
+                        (m.0, m.1.wrapping_sub(1)),
+                        (m.0 + 1, m.1.wrapping_sub(1)),
+                        (m.0.wrapping_sub(1), m.1),
+                        (m.0.wrapping_sub(1), m.1 + 1),
                         (m.0, m.1 + 1),
                         (m.0 + 1, m.1),
                         (m.0 + 1, m.1 + 1),
@@ -244,6 +244,34 @@ impl Game {
             }
         }
         possible_actions
+    }
+    pub fn is_nearby_player(&self, player_id: usize, pos: (u8, u8)) -> bool {
+        let is_nearby = self
+            .player_locations
+            .iter()
+            .enumerate()
+            .filter(|(player, _)| *player != player_id)
+            .any(|(_, (w1, w2))| {
+                ((w1.0 as i8 - pos.0 as i8).abs() <= 1 && (w1.1 as i8 - pos.1 as i8).abs() <= 1)
+                    || ((w2.0 as i8 - pos.0 as i8).abs() <= 1
+                        && (w2.1 as i8 - pos.1 as i8).abs() <= 1)
+            });
+        debug_assert_eq!(is_nearby, {
+            let mut nearby_player = false;
+            for (player, (w1, w2)) in self.player_locations.iter().enumerate() {
+                if player != player_id {
+                    for &ow in &[w1, w2] {
+                        if (ow.0 as i8 - pos.0 as i8).abs() <= 1
+                            && (ow.1 as i8 - pos.1 as i8).abs() <= 1
+                        {
+                            nearby_player = true;
+                        }
+                    }
+                }
+            }
+            nearby_player
+        });
+        true
     }
 }
 
@@ -276,7 +304,7 @@ pub fn main_loop(player_controls: [Option<&Box<dyn Player>>; 3]) -> Option<usize
                 if w1 != w2
                     && start_locations
                         .iter()
-                        .all(|&(val1, val2)| w1 != val1 && w2 != val2 && w1 != val2 && w2 != val2)
+                        .all(|&(val1, val2)| !(w1 == val1 || w2 == val2 || w1 == val2))
                     && w1.0 <= 4
                     && w1.1 <= 4
                     && w2.0 <= 4
@@ -312,7 +340,7 @@ pub fn main_loop(player_controls: [Option<&Box<dyn Player>>; 3]) -> Option<usize
                 if game.is_valid(player_id, worker, (move_x, move_y), (build_x, build_y)) {
                     if game.board[move_x as usize][move_y as usize] == TowerStates::Level3 {
                         //println!("Player {} won", player_id);
-                        //self.game.print_board();
+                        //game.print_board();
                         return Some(player_id);
                     }
                     if worker == Worker::One {

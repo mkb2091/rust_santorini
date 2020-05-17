@@ -175,10 +175,10 @@ impl lib::Player for RealPlayer {
 fn main() {
     //let player1 = RealPlayer::new();
     let players: Vec<Box<(dyn lib::Player)>> = vec![
-        //Box::new(random_choice_player::RandomChoice::new()),
+        Box::new(random_choice_player::RandomChoice::new()),
         Box::new(first_choice_player::FirstChoice::new()),
     ];
-    let result = genetic_ai::train(players, 1000, 1);
+    let result = genetic_ai::train(players, 50, 1);
     println!("{:?}", result[0]);
     let player1: Box<(dyn lib::Player)> = Box::new(RealPlayer::new());
     let player2: Box<(dyn lib::Player)> = Box::new(result[0]);

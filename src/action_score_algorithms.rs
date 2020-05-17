@@ -26,9 +26,22 @@ impl ActionScorer for PrioritizeCapping {
         player_id: usize,
         worker: lib::Worker,
         movement: (u8, u8),
-        build: (u8, u8),
+        b: (u8, u8),
     ) -> i32 {
-        (game.board[build.0 as usize][build.1 as usize] == lib::TowerStates::Level3) as i32
+        let nearby_player = game.is_nearby_player(player_id, b);
+        if game.board[b.0 as usize][b.1 as usize] == lib::TowerStates::Level3 {
+            if nearby_player {
+                1
+            } else {
+                -1
+            }
+        } else {
+            if nearby_player {
+                -1
+            } else {
+                0
+            }
+        }
     }
 }
 
@@ -42,26 +55,17 @@ impl ActionScorer for PrioritizeBlocking {
         movement: (u8, u8),
         b: (u8, u8),
     ) -> i32 {
-        let mut nearby_player = false;
-        for (player, (w1, w2)) in game.player_locations.iter().enumerate() {
-            if player != player_id {
-                for &w in &[w1, w2] {
-                    if (w.0 as i8 - b.0 as i8).abs() <= 1 && (w.1 as i8 - b.1 as i8).abs() <= 1 {
-                        nearby_player = true;
-                    }
-                }
-            }
-        }
+        let nearby_player = game.is_nearby_player(player_id, b);
         if !nearby_player {
             0
         } else {
             let mut max_near_height = 0;
             for &s in &[
-                (b.0 - 1, b.1 - 1),
-                (b.0, b.1 - 1),
-                (b.0 + 1, b.1 - 1),
-                (b.0 - 1, b.1),
-                (b.0 - 1, b.1 + 1),
+                (b.0.wrapping_sub(1), b.1.wrapping_sub(1)),
+                (b.0, b.1.wrapping_sub(1)),
+                (b.0 + 1, b.1.wrapping_sub(1)),
+                (b.0.wrapping_sub(1), b.1),
+                (b.0.wrapping_sub(1), b.1 + 1),
                 (b.0, b.1 + 1),
                 (b.0 + 1, b.1),
                 (b.0 + 1, b.1 + 1),
@@ -98,26 +102,9 @@ impl ActionScorer for PrioritizeNextToPlayer {
         } else {
             current_locations.1
         };
-        let mut nearby_player = false;
-        for (player, (w1, w2)) in game.player_locations.iter().enumerate() {
-            if player != player_id {
-                for &ow in &[w1, w2] {
-                    if (ow.0 as i8 - w.0 as i8).abs() <= 1 && (ow.1 as i8 - w.1 as i8).abs() <= 1 {
-                        nearby_player = true;
-                    }
-                }
-            }
-        }
-        let mut will_be_near_player = false;
-        for (player, (w1, w2)) in game.player_locations.iter().enumerate() {
-            if player != player_id {
-                for &ow in &[w1, w2] {
-                    if (ow.0 as i8 - m.0 as i8).abs() <= 1 && (ow.1 as i8 - m.1 as i8).abs() <= 1 {
-                        will_be_near_player = true;
-                    }
-                }
-            }
-        }
+
+        let nearby_player = game.is_nearby_player(player_id, w);
+        let will_be_near_player = game.is_nearby_player(player_id, m);
         if nearby_player {
             if will_be_near_player {
                 0
