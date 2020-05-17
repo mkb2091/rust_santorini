@@ -238,7 +238,7 @@ impl lib::Player for GeneticAI {
 fn compare_ai(ai1: &dyn lib::Player, ai2: &dyn lib::Player, matches: usize) -> (usize, usize) {
     let mut scores = (0, 0);
     for _ in 0..matches {
-        let players: [Option<&dyn lib::Player>; 3] = [Some(ai2), Some(ai1), None];
+        let players: [Option<&dyn lib::Player>; 3] = [Some(ai1), Some(ai2), None];
         let result = lib::main_loop(players);
         if let Some(result) = result {
             if result == 0 {
@@ -299,15 +299,22 @@ pub fn train(
                 old_ai = *better_ai;
                 generations += 1;
             } else {
-                ais_for_testing.push(Box::new(old_ai));
-                ais.push(old_ai);
+                if old_score > (players.len() + ais.len()) / 2 {
+                    ais_for_testing.push(Box::new(old_ai));
+                    ais.push(old_ai);
+                    println!(
+                        "Accepted new score {} at iteration {} after {} generations",
+                        old_score, iteration, generations
+                    );
+                } else {
+                    println!(
+                        "Rejected new score {} at iteration {} after {} generations",
+                        old_score, iteration, generations
+                    );
+                }
                 break;
             }
         }
-        println!(
-            "New score {} at iteration {} after {} generations",
-            old_score, iteration, generations
-        );
     }
     ais
 }
