@@ -2,6 +2,10 @@ mod first_choice_player;
 mod genetic_ai;
 mod lib;
 mod random_choice_player;
+mod action_score_algorithms;
+mod start_location_score_algorithms;
+
+
 #[macro_use]
 extern crate lazy_static;
 

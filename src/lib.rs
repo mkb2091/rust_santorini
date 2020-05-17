@@ -344,7 +344,7 @@ impl GameManager {
                             self.game.board[build_x as usize][build_y as usize] = new;
                         }
                     } else {
-                        println!("Not a valid move");
+                        //println!("Not a valid move");
                         self.game.player_statuses[player_id] = Status::Dead;
                     }
                 }
