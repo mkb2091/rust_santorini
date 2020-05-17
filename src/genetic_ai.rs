@@ -88,11 +88,8 @@ impl GeneticAI {
             })
             .sum()
     }
-    /**
     fn simplify(&mut self) {
-        for i in [2]
-            .iter()
-            .chain(3..(self.gene_weighting.iter().min().unwrap_or(3)).step(2))
+        for i in 2..(*self.gene_weighting.iter().min().unwrap_or(&3))
         {
             if self.gene_weighting.iter().all(|val| val % i == 0) {
                 for val in self.gene_weighting.iter_mut() {
@@ -100,7 +97,7 @@ impl GeneticAI {
                 }
             }
         }
-    }**/
+    }
     fn create_random(rng: &mut rand::rngs::ThreadRng) -> Self {
         let gene_weighting = [
             rng.gen_range(0, 10),
