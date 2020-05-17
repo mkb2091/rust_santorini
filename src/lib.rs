@@ -3,6 +3,8 @@ pub trait Player {
 
     fn get_starting_position(
         &mut self,
+
+        game: &Game,
         player_locations: &[((u8, u8), (u8, u8))],
     ) -> ((u8, u8), (u8, u8));
 }
@@ -147,10 +149,12 @@ impl Game {
     pub fn print_board(&self) {
         let mut result = String::new();
         let mut new_board: [[Option<(Worker, usize)>; 5]; 5] = [[None; 5]; 5];
-        for (player, ((w1x, w1y), (w2x, w2y))) in self.player_locations.iter().enumerate() {
-            if self.player_statuses[player] == Status::Playing {
-                new_board[*w1x as usize][*w1y as usize] = Some((Worker::One, player));
-                new_board[*w2x as usize][*w2y as usize] = Some((Worker::Two, player));
+        for (player, &((w1x, w1y), (w2x, w2y))) in self.player_locations.iter().enumerate() {
+            if self.player_statuses[player] == Status::Playing
+                && (w1x <= 4 && w1y <= 4 && w2x <= 4 && w2y <= 4)
+            {
+                new_board[w1x as usize][w1y as usize] = Some((Worker::One, player));
+                new_board[w2x as usize][w2y as usize] = Some((Worker::Two, player));
             }
         }
         result.push(' ');
@@ -260,7 +264,7 @@ impl GameManager {
             players,
             game: Game {
                 board: [[TowerStates::Empty; 5]; 5],
-                player_locations: [((0, 0), (0, 0)); 3],
+                player_locations: [((17, 17), (17, 17)); 3],
                 player_statuses,
             },
         }
@@ -278,21 +282,24 @@ impl GameManager {
             .collect();
         for &player_id in players.iter() {
             if let Some(player) = &mut self.players[player_id] {
-                let (w1, w2) = player.get_starting_position(&start_locations);
-                if w1 != w2
-                    && !start_locations
-                        .iter()
-                        .any(|&(val1, val2)| w1 == val1 || w2 == val1 || w1 == val2 || w2 == val2)
-                    && w1.0 <= 4
-                    && w1.1 <= 4
-                    && w2.0 <= 4
-                    && w2.1 <= 4
-                {
-                    start_locations.push((w1, w2));
-                    self.game.player_locations[player_id] == (w1, w2);
-                } else {
-					println!("Failed to enter valid start location");
-}
+                loop {
+                    let (w1, w2) = player.get_starting_position(&self.game, &start_locations);
+                    if w1 != w2
+                        && start_locations.iter().all(|&(val1, val2)| {
+                            w1 != val1 && w2 != val2 && w1 != val2 && w2 != val2
+                        })
+                        && w1.0 <= 4
+                        && w1.1 <= 4
+                        && w2.0 <= 4
+                        && w2.1 <= 4
+                    {
+                        start_locations.push((w1, w2));
+                        self.game.player_locations[player_id] = (w1, w2);
+                        break;
+                    } else {
+                        println!("Failed to enter valid start location: ({:?}, {:?})", w1, w2);
+                    }
+                }
             }
         }
 
@@ -337,6 +344,7 @@ impl GameManager {
                             self.game.board[build_x as usize][build_y as usize] = new;
                         }
                     } else {
+                        println!("Not a valid move");
                         self.game.player_statuses[player_id] = Status::Dead;
                     }
                 }

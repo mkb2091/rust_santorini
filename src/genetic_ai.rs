@@ -2,12 +2,15 @@ use crate::lib;
 use rand::prelude::*;
 
 const GENE_COUNT: usize = 3;
+const START_LOCATION_GENE_COUNT: usize = 1;
 lazy_static! {
     static ref GENES: [std::sync::Arc<dyn ActionScorer>; GENE_COUNT] = [
         std::sync::Arc::new(PrioritizeClimbing {}),
         std::sync::Arc::new(PrioritizeCapping {}),
         std::sync::Arc::new(PrioritizeBlocking {}),
     ];
+    static ref START_LOCATION_GENES: [std::sync::Arc<dyn StartScorer>; START_LOCATION_GENE_COUNT] =
+        [std::sync::Arc::new(StartNearPlayers {}),];
 }
 
 trait ActionScorer: Sync + Send {
@@ -19,6 +22,37 @@ trait ActionScorer: Sync + Send {
         movement: (u8, u8),
         build: (u8, u8),
     ) -> i32;
+}
+
+trait StartScorer: Sync + Send {
+    fn get_score(
+        &self,
+        player_locations: &[((u8, u8), (u8, u8))],
+        start_locations: (u8, u8),
+        other_starting_location: Option<(u8, u8)>,
+    ) -> i32;
+}
+
+struct StartNearPlayers {}
+impl StartScorer for StartNearPlayers {
+    fn get_score(
+        &self,
+        player_locations: &[((u8, u8), (u8, u8))],
+        s: (u8, u8),
+        other_starting_location: Option<(u8, u8)>,
+    ) -> i32 {
+        -player_locations
+            .iter()
+            .map(|(w1, w2)| {
+                ((w1.0 as i8 - s.0 as i8)
+                    .abs()
+                    .max((w1.1 as i8 - s.1 as i8).abs())
+                    + (w2.0 as i8 - s.0 as i8)
+                        .abs()
+                        .max((w2.1 as i8 - s.1 as i8).abs())) as i32
+            })
+            .sum::<i32>()
+    }
 }
 
 struct PrioritizeClimbing {}
@@ -105,6 +139,7 @@ impl ActionScorer for PrioritizeBlocking {
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub struct GeneticAI {
     pub gene_weighting: [u16; GENE_COUNT],
+    pub start_location_gene_weighting: [u16; START_LOCATION_GENE_COUNT],
     //rng: rand::rngs::thread::ThreadRng
 }
 
@@ -112,6 +147,7 @@ impl GeneticAI {
     pub fn new() -> Self {
         Self {
             gene_weighting: [0, 0, 0],
+            start_location_gene_weighting: [0],
         }
     }
 }
@@ -133,6 +169,22 @@ impl GeneticAI {
             })
             .sum()
     }
+
+    fn get_start_location_score(
+        &mut self,
+        player_locations: &[((u8, u8), (u8, u8))],
+        start_locations: (u8, u8),
+        other_starting_location: Option<(u8, u8)>,
+    ) -> i32 {
+        START_LOCATION_GENES
+            .iter()
+            .zip(self.start_location_gene_weighting.iter())
+            .map(|(gene, weighting)| {
+                gene.get_score(player_locations, start_locations, other_starting_location)
+                    * (*weighting as i32)
+            })
+            .sum()
+    }
     /**
     fn simplify(&mut self) {
         for i in [2]
@@ -148,10 +200,23 @@ impl GeneticAI {
     }**/
 
     fn create_altered(&self, rng: &mut rand::rngs::ThreadRng) -> Self {
-        let mut gene_weighting = self.gene_weighting.clone();
-        let index = rng.gen_range(0, gene_weighting.len());
-        gene_weighting[index] = gene_weighting[index].saturating_sub(1) + rng.gen_range(0, 2);
-        Self { gene_weighting }
+        let gene_weighting = {
+            let mut gene_weighting = self.gene_weighting.clone();
+            let index = rng.gen_range(0, gene_weighting.len());
+            gene_weighting[index] = gene_weighting[index].saturating_sub(1) + rng.gen_range(0, 2);
+            gene_weighting
+        };
+        let start_location_gene_weighting = {
+            let mut start_location_gene_weighting = self.start_location_gene_weighting.clone();
+            let index = rng.gen_range(0, start_location_gene_weighting.len());
+            start_location_gene_weighting[index] =
+                start_location_gene_weighting[index].saturating_sub(1) + rng.gen_range(0, 2);
+            start_location_gene_weighting
+        };
+        Self {
+            gene_weighting,
+            start_location_gene_weighting,
+        }
     }
 }
 impl lib::Player for GeneticAI {
@@ -170,10 +235,12 @@ impl lib::Player for GeneticAI {
     }
     fn get_starting_position(
         &mut self,
+
+        _: &lib::Game,
         player_locations: &[((u8, u8), (u8, u8))],
     ) -> ((u8, u8), (u8, u8)) {
         let mut values: Vec<(u8, u8)> = Vec::new();
-        for &i in [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (1, 0)].iter() {
+        for i in (0..25).map(|val| (val / 5, val % 5)) {
             if player_locations
                 .iter()
                 .all(|&(val1, val2)| val1 != i && val2 != i)
@@ -181,7 +248,20 @@ impl lib::Player for GeneticAI {
                 values.push(i);
             }
         }
-        return (values[0], values[1]);
+        let first_location = values
+            .iter()
+            .max_by_key(|location| {
+                self.get_start_location_score(player_locations, **location, None)
+            })
+            .unwrap_or(&values[0]);
+        let second_location = values
+            .iter()
+            .filter(|x| *x != first_location)
+            .max_by_key(|location| {
+                self.get_start_location_score(player_locations, **location, Some(*first_location))
+            })
+            .unwrap_or(&values[0]);
+        return (*first_location, *second_location);
     }
 }
 

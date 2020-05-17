@@ -99,8 +99,10 @@ impl lib::Player for RealPlayer {
     }
     fn get_starting_position(
         &mut self,
+        game: &lib::Game,
         player_locations: &[((u8, u8), (u8, u8))],
     ) -> ((u8, u8), (u8, u8)) {
+        game.print_board();
         loop {
             let w1 = {
                 println!("Enter coordinates of first worker");
@@ -174,7 +176,7 @@ impl lib::Player for RealPlayer {
 fn main() {
     //let player1 = RealPlayer::new();
     let players = [genetic_ai::GeneticAI::new(); 100];
-    let result = genetic_ai::train(players.to_vec(), 50, 10, 10);
+    let result = genetic_ai::train(players.to_vec(), 50, 10, 1);
     println!("{:?}", result[0]);
     let player1 = RealPlayer::new();
     let player2 = result[0];

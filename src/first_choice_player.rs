@@ -22,6 +22,8 @@ impl lib::Player for FirstChoice {
     }
     fn get_starting_position(
         &mut self,
+
+        _: &lib::Game,
         player_locations: &[((u8, u8), (u8, u8))],
     ) -> ((u8, u8), (u8, u8)) {
         let mut values: Vec<(u8, u8)> = Vec::new();
