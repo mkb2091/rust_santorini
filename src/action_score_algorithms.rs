@@ -26,12 +26,12 @@ impl ActionScorer for PrioritizeCapping {
     fn get_score(
         &self,
         game: &lib::Game,
-        player_id: usize,
+        _player_id: usize,
         _worker: lib::Worker,
         _movement: (u8, u8),
         b: (u8, u8),
-        is_near_player: bool,
-        will_be_near_player: bool,
+        _is_near_player: bool,
+        _will_be_near_player: bool,
         will_build_near_player: bool,
     ) -> i32 {
         if game.board[b.0 as usize][b.1 as usize] == lib::TowerStates::Level3 {
@@ -53,13 +53,13 @@ impl ActionScorer for PrioritizeBlocking {
     fn get_score(
         &self,
         game: &lib::Game,
-        player_id: usize,
+        _player_id: usize,
         _worker: lib::Worker,
         _movement: (u8, u8),
         b: (u8, u8),
         is_near_player: bool,
-        will_be_near_player: bool,
-        will_build_near_player: bool,
+        _will_be_near_player: bool,
+        _will_build_near_player: bool,
     ) -> i32 {
         if !is_near_player {
             0
@@ -95,14 +95,14 @@ pub struct PrioritizeNextToPlayer {}
 impl ActionScorer for PrioritizeNextToPlayer {
     fn get_score(
         &self,
-        game: &lib::Game,
-        player_id: usize,
-        worker: lib::Worker,
-        m: (u8, u8),
+        _game: &lib::Game,
+        _player_id: usize,
+        _worker: lib::Worker,
+        _m: (u8, u8),
         _build: (u8, u8),
         is_near_player: bool,
         will_be_near_player: bool,
-        will_build_near_player: bool,
+        _will_build_near_player: bool,
     ) -> i32 {
         if is_near_player {
             if will_be_near_player {
