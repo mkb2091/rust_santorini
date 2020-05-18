@@ -89,22 +89,51 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn is_valid(
-        &self,
-        player_id: usize,
-        worker: Worker,
-        movement: (u8, u8),
-        build: (u8, u8),
-    ) -> bool {
+    pub fn can_move_to_square(&self, player_id: usize, worker: Worker, movement: (u8, u8)) -> bool {
         let (move_x, move_y) = movement;
-        let (build_x, build_y) = build;
-        let (old_w1, old_w2) = self.player_locations[player_id];
+        if move_x > 4 || move_y > 4 {
+            return false;
+        }
         for (i, (w1, w2)) in self.player_locations.iter().enumerate() {
             if self.player_statuses[i] == Status::Playing {
                 if (move_x, move_y) == *w1 || (move_x, move_y) == *w2 {
                     // Check if player is moving into an already occupied block
                     return false;
                 }
+            }
+        }
+        let base_worker = if worker == Worker::One {
+            self.player_locations[player_id].0
+        } else {
+            self.player_locations[player_id].1
+        };
+        !(((base_worker.0 as i8 - move_x as i8).abs() > 1)
+            || ((base_worker.1 as i8 - move_y as i8).abs() > 1)
+            || ((self.board[base_worker.0 as usize][base_worker.1 as usize].to_int() as i8
+                - self.board[move_x as usize][move_y as usize].to_int() as i8)
+                < -1)
+            || (self.board[move_x as usize][move_y as usize] == TowerStates::Capped))
+    }
+    pub fn is_valid(
+        &self,
+        player_id: usize,
+        worker: Worker,
+        movement: (u8, u8),
+        build: (u8, u8),
+        checked_movement: bool,
+    ) -> bool {
+        if !checked_movement && !self.can_move_to_square(player_id, worker, movement) {
+            return false;
+        }
+
+        let (move_x, move_y) = movement;
+        let (build_x, build_y) = build;
+        if build_x > 4 || build_y > 4 {
+            return false;
+        }
+        let (old_w1, old_w2) = self.player_locations[player_id];
+        for (i, (w1, w2)) in self.player_locations.iter().enumerate() {
+            if self.player_statuses[i] == Status::Playing {
                 if ((build_x, build_y) == *w1 && !(worker == Worker::One && old_w1 == *w1))
                     || ((build_x, build_y) == *w2 && !(worker == Worker::Two && old_w2 == *w2))
                 {
@@ -119,13 +148,7 @@ impl Game {
         } else {
             self.player_locations[player_id].1
         };
-        !(((base_worker.0 as i8 - move_x as i8).abs() > 1)
-            || ((base_worker.1 as i8 - move_y as i8).abs() > 1)
-            || ((self.board[base_worker.0 as usize][base_worker.1 as usize].to_int() as i8
-                - self.board[move_x as usize][move_y as usize].to_int() as i8)
-                < -1)
-            || (self.board[move_x as usize][move_y as usize] == TowerStates::Capped)
-            || ((move_x, move_y) == (build_x, build_y))
+        !(((move_x, move_y) == (build_x, build_y))
             || (move_x as i8 - build_x as i8).abs() > 1
             || (move_y as i8 - build_y as i8).abs() > 1
             || (self.board[build_x as usize][build_y as usize] == TowerStates::Capped))
@@ -190,14 +213,12 @@ impl Game {
         println!("Levels: ◌○◍◉●\nGame:\n{}", result);
     }
     pub fn list_possible_actions(&self, player_id: usize) -> Vec<Action> {
-        let mut possible_actions: Vec<Action> = Vec::with_capacity(8 * 8);
+        let mut possible_actions: Vec<Action> = Vec::with_capacity(2 * 8 * 8);
         let (worker1, worker2) = self.player_locations[player_id];
-        for &worker in [Worker::One, Worker::Two].iter() {
-            let w = if worker == Worker::One {
-                worker1
-            } else {
-                worker2
-            };
+        for (&worker, &w) in [Worker::One, Worker::Two]
+            .iter()
+            .zip([worker1, worker2].iter())
+        {
             for &m in &[
                 (w.0.wrapping_sub(1), w.1.wrapping_sub(1)),
                 (w.0, w.1.wrapping_sub(1)),
@@ -208,7 +229,7 @@ impl Game {
                 (w.0 + 1, w.1),
                 (w.0 + 1, w.1 + 1),
             ] {
-                if m.0 <= 4 && m.1 <= 4 {
+                if self.can_move_to_square(player_id, worker, m) {
                     for &b in &[
                         (m.0.wrapping_sub(1), m.1.wrapping_sub(1)),
                         (m.0, m.1.wrapping_sub(1)),
@@ -219,7 +240,7 @@ impl Game {
                         (m.0 + 1, m.1),
                         (m.0 + 1, m.1 + 1),
                     ] {
-                        if b.0 <= 4 && b.1 <= 4 && self.is_valid(player_id, worker, m, b) {
+                        if self.is_valid(player_id, worker, m, b, true) {
                             possible_actions.push((worker, m, b));
                         }
                     }
@@ -320,7 +341,13 @@ pub fn main_loop(player_controls: [Option<&dyn Player>; 3]) -> Option<usize> {
                 let (worker, (move_x, move_y), (build_x, build_y)) =
                     player.get_action(&game, player_id);
 
-                if game.is_valid(player_id, worker, (move_x, move_y), (build_x, build_y)) {
+                if game.is_valid(
+                    player_id,
+                    worker,
+                    (move_x, move_y),
+                    (build_x, build_y),
+                    false,
+                ) {
                     if game.board[move_x as usize][move_y as usize] == TowerStates::Level3 {
                         //println!("Player {} won", player_id);
                         //game.print_board();
