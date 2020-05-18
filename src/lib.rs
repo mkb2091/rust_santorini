@@ -142,12 +142,6 @@ impl Game {
                 }
             }
         }
-
-        let base_worker = if worker == Worker::One {
-            self.player_locations[player_id].0
-        } else {
-            self.player_locations[player_id].1
-        };
         !(((move_x, move_y) == (build_x, build_y))
             || (move_x as i8 - build_x as i8).abs() > 1
             || (move_y as i8 - build_y as i8).abs() > 1
@@ -219,7 +213,7 @@ impl Game {
             .iter()
             .zip([worker1, worker2].iter())
         {
-            for &m in &[
+            for &m in [
                 (w.0.wrapping_sub(1), w.1.wrapping_sub(1)),
                 (w.0, w.1.wrapping_sub(1)),
                 (w.0 + 1, w.1.wrapping_sub(1)),
@@ -228,21 +222,22 @@ impl Game {
                 (w.0, w.1 + 1),
                 (w.0 + 1, w.1),
                 (w.0 + 1, w.1 + 1),
-            ] {
-                if self.can_move_to_square(player_id, worker, m) {
-                    for &b in &[
-                        (m.0.wrapping_sub(1), m.1.wrapping_sub(1)),
-                        (m.0, m.1.wrapping_sub(1)),
-                        (m.0 + 1, m.1.wrapping_sub(1)),
-                        (m.0.wrapping_sub(1), m.1),
-                        (m.0.wrapping_sub(1), m.1 + 1),
-                        (m.0, m.1 + 1),
-                        (m.0 + 1, m.1),
-                        (m.0 + 1, m.1 + 1),
-                    ] {
-                        if self.is_valid(player_id, worker, m, b, true) {
-                            possible_actions.push((worker, m, b));
-                        }
+            ]
+            .iter()
+            .filter(|m| self.can_move_to_square(player_id, worker, **m))
+            {
+                for &b in &[
+                    (m.0.wrapping_sub(1), m.1.wrapping_sub(1)),
+                    (m.0, m.1.wrapping_sub(1)),
+                    (m.0 + 1, m.1.wrapping_sub(1)),
+                    (m.0.wrapping_sub(1), m.1),
+                    (m.0.wrapping_sub(1), m.1 + 1),
+                    (m.0, m.1 + 1),
+                    (m.0 + 1, m.1),
+                    (m.0 + 1, m.1 + 1),
+                ] {
+                    if self.is_valid(player_id, worker, m, b, true) {
+                        possible_actions.push((worker, m, b));
                     }
                 }
             }
