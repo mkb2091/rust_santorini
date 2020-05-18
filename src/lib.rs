@@ -119,15 +119,15 @@ impl Game {
         } else {
             self.player_locations[player_id].1
         };
-        !((((base_worker.0 as i8 - move_x as i8).abs() > 1)
-            || ((base_worker.1 as i8 - move_y as i8).abs() > 1))
+        !(((base_worker.0 as i8 - move_x as i8).abs() > 1)
+            || ((base_worker.1 as i8 - move_y as i8).abs() > 1)
             || ((self.board[base_worker.0 as usize][base_worker.1 as usize].to_int() as i8
                 - self.board[move_x as usize][move_y as usize].to_int() as i8)
                 < -1)
             || (self.board[move_x as usize][move_y as usize] == TowerStates::Capped)
             || ((move_x, move_y) == (build_x, build_y))
-            || ((move_x as i8 - build_x as i8).abs() > 1
-                && (move_y as i8 - build_y as i8).abs() > 1)
+            || (move_x as i8 - build_x as i8).abs() > 1
+            || (move_y as i8 - build_y as i8).abs() > 1
             || (self.board[build_x as usize][build_y as usize] == TowerStates::Capped))
     }
 
