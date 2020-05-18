@@ -148,3 +148,33 @@ impl ActionScorer for PrioritizeNextToPlayer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lib::{Game, Status, TowerStates};
+    const TSE: TowerStates = TowerStates::Empty;
+    const TS1: TowerStates = TowerStates::Level1;
+
+    #[test]
+    fn prioritize_climbing_scores_climb_highest() {
+        let game = Game {
+            board: [
+                [TSE, TS1, TSE, TSE, TSE],
+                [TSE; 5],
+                [TSE; 5],
+                [TSE; 5],
+                [TSE; 5],
+            ],
+            player_locations: [((0, 0), (3, 3)), ((17, 17), (17, 17)), ((17, 17), (17, 17))],
+
+            player_statuses: [Status::Playing, Status::Dead, Status::Dead],
+        };
+        let climbing = PrioritizeClimbing {};
+        let actions = game.list_possible_actions(0);
+        let action = actions.iter().max_by_key(|(worker, movement, build)| {
+            climbing.get_score(&game, 0, *worker, *movement, *build, false, false, false)
+        });
+        assert_eq!(action.unwrap().1, (0, 1));
+    }
+}
