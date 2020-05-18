@@ -190,7 +190,7 @@ impl Game {
         println!("Levels: ◌○◍◉●\nGame:\n{}", result);
     }
     pub fn list_possible_actions(&self, player_id: usize) -> Vec<Action> {
-        let mut possible_actions: Vec<Action> = Vec::new();
+        let mut possible_actions: Vec<Action> = Vec::with_capacity(8 * 8);
         let (worker1, worker2) = self.player_locations[player_id];
         for &worker in [Worker::One, Worker::Two].iter() {
             let w = if worker == Worker::One {
