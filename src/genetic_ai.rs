@@ -5,8 +5,8 @@ use rand::prelude::*;
 use rayon::prelude::*;
 
 const GENE_COUNT: usize = 4;
-const START_LOCATION_GENE_COUNT: usize = 2;
-const TOTAL_PERMUTATIONS: usize = 3 * 3 * 3 * 3 * 3 * 3 - 1;
+const START_LOCATION_GENE_COUNT: usize = 3;
+const TOTAL_PERMUTATIONS: usize = (3 * 3 * 3 * 3) * (3 * 3 * 3) - 1;
 lazy_static! {
     static ref GENES: [std::sync::Arc<dyn ActionScorer>; GENE_COUNT] = [
         std::sync::Arc::new(action_score_algorithms::PrioritizeClimbing {}),
@@ -17,6 +17,7 @@ lazy_static! {
     static ref START_LOCATION_GENES: [std::sync::Arc<dyn StartScorer>; START_LOCATION_GENE_COUNT] = [
         std::sync::Arc::new(start_location_score_algorithms::StartNearPlayers {}),
         std::sync::Arc::new(start_location_score_algorithms::StartNearMiddle {}),
+        std::sync::Arc::new(start_location_score_algorithms::StartAwayFromOtherWorker {}),
     ];
 }
 
@@ -54,7 +55,7 @@ impl GeneticAI {
     pub fn new() -> Self {
         Self {
             gene_weighting: [0, 0, 0, 0],
-            start_location_gene_weighting: [0, 0],
+            start_location_gene_weighting: [0, 0, 0],
         }
     }
 }
@@ -120,7 +121,8 @@ impl GeneticAI {
             rng.gen_range(0, 10),
             rng.gen_range(0, 10),
         ];
-        let start_location_gene_weighting = [rng.gen_range(0, 10), rng.gen_range(0, 10)];
+        let start_location_gene_weighting = [rng.gen_range(0, 10), rng.gen_range(0, 10), 
+            rng.gen_range(0, 10),];
         Self {
             gene_weighting,
             start_location_gene_weighting,
@@ -175,13 +177,21 @@ impl GeneticAI {
                             ]
                             .iter()
                             {
-                                let new = Self {
-                                    gene_weighting: [*g0, *g1, *g2, *g3],
-                                    start_location_gene_weighting: [*gsl0, *gsl1],
-                                };
-                                if *self != new {
-                                    altered[index] = new;
-                                    index += 1;
+                                for gsl2 in [
+                                    gsl[2].saturating_sub(amount),
+                                    gsl[2],
+                                    gsl[2].saturating_add(amount),
+                                ]
+                                .iter()
+                                {
+                                    let new = Self {
+                                        gene_weighting: [*g0, *g1, *g2, *g3],
+                                        start_location_gene_weighting: [*gsl0, *gsl1, *gsl2],
+                                    };
+                                    if *self != new {
+                                        altered[index] = new;
+                                        index += 1;
+                                    }
                                 }
                             }
                         }

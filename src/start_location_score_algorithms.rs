@@ -34,3 +34,19 @@ impl StartScorer for StartNearMiddle {
         -(s.0 as i8 - 2).max(s.1 as i8 - 2).abs() as i32
     }
 }
+
+pub struct StartAwayFromOtherWorker {}
+impl StartScorer for StartAwayFromOtherWorker {
+    fn get_score(
+        &self,
+        _player_locations: &[lib::StartLocation],
+        s: (u8, u8),
+        other_starting_location: Option<(u8, u8)>,
+    ) -> i32 {
+        if let Some(ow) = other_starting_location {
+            (s.0 as i8 - ow.0 as i8).max(s.1 as i8 - ow.0 as i8).abs() as i32
+        } else {
+            0
+        }
+    }
+}
