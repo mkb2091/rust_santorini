@@ -2,6 +2,7 @@ use crate::action_score_algorithms;
 use crate::lib;
 use crate::start_location_score_algorithms;
 use rand::prelude::*;
+use rayon::prelude::*;
 
 const GENE_COUNT: usize = 4;
 const START_LOCATION_GENE_COUNT: usize = 2;
@@ -27,6 +28,9 @@ pub trait ActionScorer: Sync + Send {
         worker: lib::Worker,
         movement: (u8, u8),
         build: (u8, u8),
+        is_near_player: bool,
+        will_be_near_player: bool,
+        will_build_near_player: bool,
     ) -> i32;
 }
 
@@ -63,12 +67,24 @@ impl GeneticAI {
         worker: lib::Worker,
         movement: (u8, u8),
         build: (u8, u8),
+        is_near_player: bool,
     ) -> i32 {
+        let will_be_near_player = game.is_near_player(player_id, movement);
+        let will_build_near_player = game.is_near_player(player_id, build);
         GENES
             .iter()
             .zip(self.gene_weighting.iter())
             .map(|(gene, weighting)| {
-                gene.get_score(game, player_id, worker, movement, build) * (*weighting as i32)
+                gene.get_score(
+                    game,
+                    player_id,
+                    worker,
+                    movement,
+                    build,
+                    is_near_player,
+                    will_be_near_player,
+                    will_build_near_player,
+                ) * (*weighting as i32)
             })
             .sum()
     }
@@ -89,8 +105,7 @@ impl GeneticAI {
             .sum()
     }
     fn simplify(&mut self) {
-        for i in 2..(*self.gene_weighting.iter().min().unwrap_or(&3))
-        {
+        for i in 2..(*self.gene_weighting.iter().min().unwrap_or(&3)) {
             if self.gene_weighting.iter().all(|val| val % i == 0) {
                 for val in self.gene_weighting.iter_mut() {
                     *val /= i;
@@ -179,13 +194,31 @@ impl GeneticAI {
 }
 impl lib::Player for GeneticAI {
     fn get_action(&self, game: &lib::Game, player_id: usize) -> lib::Action {
-        *game
-            .list_possible_actions(player_id)
-            .iter()
-            .max_by_key(|(worker, movement, build)| {
-                self.get_score(game, player_id, *worker, *movement, *build)
-            })
-            .unwrap_or(&(lib::Worker::One, (0, 0), (0, 0)))
+        let actions = game.list_possible_actions(player_id);
+        if actions.is_empty() {
+            (lib::Worker::One, (0, 0), (0, 0))
+        } else {
+            let location = game.player_locations[player_id];
+            let w1_is_near_player = game.is_near_player(player_id, location.0);
+            let w2_is_near_player = game.is_near_player(player_id, location.1);
+            *actions
+                .iter()
+                .max_by_key(|(worker, movement, build)| {
+                    self.get_score(
+                        game,
+                        player_id,
+                        *worker,
+                        *movement,
+                        *build,
+                        if *worker == lib::Worker::One {
+                            w1_is_near_player
+                        } else {
+                            w2_is_near_player
+                        },
+                    )
+                })
+                .unwrap_or(&(lib::Worker::One, (0, 0), (0, 0)))
+        }
     }
     fn get_starting_position(
         &self,
@@ -264,7 +297,7 @@ pub fn train(
         loop {
             let altered = old_ai.create_altered();
             if let Some((better_ai, better_score)) = altered
-                .iter()
+                .par_iter()
                 .map(|new_ai| {
                     (
                         new_ai,

@@ -10,6 +10,9 @@ impl ActionScorer for PrioritizeClimbing {
         worker: lib::Worker,
         movement: (u8, u8),
         _build: (u8, u8),
+        _is_near_player: bool,
+        _will_be_near_player: bool,
+        _will_build_near_player: bool,
     ) -> i32 {
         let (w1, w2) = game.player_locations[player_id];
         let old_pos = if worker == lib::Worker::One { w1 } else { w2 };
@@ -27,15 +30,17 @@ impl ActionScorer for PrioritizeCapping {
         _worker: lib::Worker,
         _movement: (u8, u8),
         b: (u8, u8),
+        is_near_player: bool,
+        will_be_near_player: bool,
+        will_build_near_player: bool,
     ) -> i32 {
-        let nearby_player = game.is_nearby_player(player_id, b);
         if game.board[b.0 as usize][b.1 as usize] == lib::TowerStates::Level3 {
-            if nearby_player {
+            if will_build_near_player {
                 1
             } else {
                 -1
             }
-        } else if nearby_player {
+        } else if will_build_near_player {
             -1
         } else {
             0
@@ -52,9 +57,11 @@ impl ActionScorer for PrioritizeBlocking {
         _worker: lib::Worker,
         _movement: (u8, u8),
         b: (u8, u8),
+        is_near_player: bool,
+        will_be_near_player: bool,
+        will_build_near_player: bool,
     ) -> i32 {
-        let nearby_player = game.is_nearby_player(player_id, b);
-        if !nearby_player {
+        if !is_near_player {
             0
         } else {
             let mut max_near_height = 0;
@@ -93,17 +100,11 @@ impl ActionScorer for PrioritizeNextToPlayer {
         worker: lib::Worker,
         m: (u8, u8),
         _build: (u8, u8),
+        is_near_player: bool,
+        will_be_near_player: bool,
+        will_build_near_player: bool,
     ) -> i32 {
-        let current_locations = game.player_locations[player_id];
-        let w = if worker == lib::Worker::One {
-            current_locations.0
-        } else {
-            current_locations.1
-        };
-
-        let nearby_player = game.is_nearby_player(player_id, w);
-        let will_be_near_player = game.is_nearby_player(player_id, m);
-        if nearby_player {
+        if is_near_player {
             if will_be_near_player {
                 0
             } else {

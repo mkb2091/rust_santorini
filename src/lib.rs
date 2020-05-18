@@ -1,7 +1,7 @@
 pub type Action = (Worker, (u8, u8), (u8, u8));
 pub type StartLocation = ((u8, u8), (u8, u8));
 
-pub trait Player {
+pub trait Player: Send + Sync {
     fn get_action(&self, game: &Game, player_id: usize) -> Action;
 
     fn get_starting_position(
@@ -228,8 +228,8 @@ impl Game {
         }
         possible_actions
     }
-    pub fn is_nearby_player(&self, player_id: usize, pos: (u8, u8)) -> bool {
-        let is_nearby = self
+    pub fn is_near_player(&self, player_id: usize, pos: (u8, u8)) -> bool {
+        let is_near = self
             .player_locations
             .iter()
             .enumerate()
@@ -239,20 +239,20 @@ impl Game {
                     || ((w2.0 as i8 - pos.0 as i8).abs() <= 1
                         && (w2.1 as i8 - pos.1 as i8).abs() <= 1)
             });
-        debug_assert_eq!(is_nearby, {
-            let mut nearby_player = false;
+        debug_assert_eq!(is_near, {
+            let mut near_player = false;
             for (player, (w1, w2)) in self.player_locations.iter().enumerate() {
                 if player != player_id {
                     for &ow in &[w1, w2] {
                         if (ow.0 as i8 - pos.0 as i8).abs() <= 1
                             && (ow.1 as i8 - pos.1 as i8).abs() <= 1
                         {
-                            nearby_player = true;
+                            near_player = true;
                         }
                     }
                 }
             }
-            nearby_player
+            near_player
         });
         true
     }
