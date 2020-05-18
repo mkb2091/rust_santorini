@@ -125,27 +125,35 @@ impl Game {
         if !checked_movement && !self.can_move_to_square(player_id, worker, movement) {
             return false;
         }
-
         let (move_x, move_y) = movement;
         let (build_x, build_y) = build;
         if build_x > 4 || build_y > 4 {
             return false;
         }
         let (old_w1, old_w2) = self.player_locations[player_id];
+        if worker == Worker::One {
+            if build == old_w2 {
+                return false;
+            }
+        } else {
+            if build == old_w1 {
+                return false;
+            }
+        }
         for (i, (w1, w2)) in self.player_locations.iter().enumerate() {
             if self.player_statuses[i] == Status::Playing {
-                if ((build_x, build_y) == *w1 && !(worker == Worker::One && old_w1 == *w1))
-                    || ((build_x, build_y) == *w2 && !(worker == Worker::Two && old_w2 == *w2))
-                {
-                    // Check if player is building on an already occupied block
-                    return false;
+                if i != player_id {
+                    if build == *w1 || build == *w2 {
+                        // Check if player is building on an already occupied block
+                        return false;
+                    }
                 }
             }
         }
-        !(((move_x, move_y) == (build_x, build_y))
-            || (move_x as i8 - build_x as i8).abs() > 1
-            || (move_y as i8 - build_y as i8).abs() > 1
-            || (self.board[build_x as usize][build_y as usize] == TowerStates::Capped))
+        movement != build
+            && (move_x as i8 - build_x as i8).abs() <= 1
+            && (move_y as i8 - build_y as i8).abs() <= 1
+            && self.board[build_x as usize][build_y as usize] != TowerStates::Capped
     }
 
     pub fn print_board(&self) {
@@ -345,7 +353,7 @@ pub fn main_loop(player_controls: [Option<&dyn Player>; 3]) -> Option<usize> {
                 ) {
                     if game.board[move_x as usize][move_y as usize] == TowerStates::Level3 {
                         //println!("Player {} won", player_id);
-                        //game.print_board();
+                        game.print_board();
                         return Some(player_id);
                     }
                     if worker == Worker::One {
@@ -365,4 +373,23 @@ pub fn main_loop(player_controls: [Option<&dyn Player>; 3]) -> Option<usize> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn single_worker_has_64_actions() {
+        let game = Game {
+            board: [[TowerStates::Empty; 5]; 5],
+            player_locations: [
+                ((2, 2), (17, 17)),
+                ((17, 17), (17, 17)),
+                ((17, 17), (17, 17)),
+            ],
+            player_statuses: [Status::Playing, Status::Dead, Status::Dead],
+        };
+        assert_eq!(game.list_possible_actions(0).len(), 64);
+    }
 }

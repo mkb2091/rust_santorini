@@ -4,14 +4,15 @@ use crate::start_location_score_algorithms;
 use rand::prelude::*;
 use rayon::prelude::*;
 
-const GENE_COUNT: usize = 4;
+const GENE_COUNT: usize = 5;
 const START_LOCATION_GENE_COUNT: usize = 3;
-const TOTAL_PERMUTATIONS: usize = (3 * 3 * 3 * 3) * (3 * 3 * 3) - 1;
+const TOTAL_PERMUTATIONS: usize = (3 * 3 * 3 * 3 * 3) * (3 * 3 * 3) - 1;
 lazy_static! {
     static ref GENES: [std::sync::Arc<dyn ActionScorer>; GENE_COUNT] = [
         std::sync::Arc::new(action_score_algorithms::PrioritizeClimbing {}),
         std::sync::Arc::new(action_score_algorithms::PrioritizeCapping {}),
         std::sync::Arc::new(action_score_algorithms::PrioritizeBlocking {}),
+        std::sync::Arc::new(action_score_algorithms::PrioritizeBuildingLow {}),
         std::sync::Arc::new(action_score_algorithms::PrioritizeNextToPlayer {}),
     ];
     static ref START_LOCATION_GENES: [std::sync::Arc<dyn StartScorer>; START_LOCATION_GENE_COUNT] = [
@@ -54,7 +55,7 @@ pub struct GeneticAI {
 impl GeneticAI {
     pub fn new() -> Self {
         Self {
-            gene_weighting: [0, 0, 0, 0],
+            gene_weighting: [0, 0, 0, 0, 0],
             start_location_gene_weighting: [0, 0, 0],
         }
     }
@@ -75,6 +76,7 @@ impl GeneticAI {
         GENES
             .iter()
             .zip(self.gene_weighting.iter())
+            .filter(|(_, weighting)| **weighting != 0)
             .map(|(gene, weighting)| {
                 gene.get_score(
                     game,
@@ -99,6 +101,7 @@ impl GeneticAI {
         START_LOCATION_GENES
             .iter()
             .zip(self.start_location_gene_weighting.iter())
+            .filter(|(_, weighting)| **weighting != 0)
             .map(|(gene, weighting)| {
                 gene.get_score(player_locations, start_locations, other_starting_location)
                     * (*weighting as i32)
@@ -120,9 +123,13 @@ impl GeneticAI {
             rng.gen_range(0, 10),
             rng.gen_range(0, 10),
             rng.gen_range(0, 10),
+            rng.gen_range(0, 10),
         ];
-        let start_location_gene_weighting = [rng.gen_range(0, 10), rng.gen_range(0, 10), 
-            rng.gen_range(0, 10),];
+        let start_location_gene_weighting = [
+            rng.gen_range(0, 10),
+            rng.gen_range(0, 10),
+            rng.gen_range(0, 10),
+        ];
         Self {
             gene_weighting,
             start_location_gene_weighting,
@@ -163,34 +170,42 @@ impl GeneticAI {
                     ]
                     .iter()
                     {
-                        for gsl0 in [
-                            gsl[0].saturating_sub(amount),
-                            gsl[0],
-                            gsl[0].saturating_add(amount),
+                        for g4 in [
+                            g[4].saturating_sub(amount),
+                            g[4],
+                            g[4].saturating_add(amount),
                         ]
                         .iter()
                         {
-                            for gsl1 in [
-                                gsl[1].saturating_sub(amount),
-                                gsl[1],
-                                gsl[1].saturating_add(amount),
+                            for gsl0 in [
+                                gsl[0].saturating_sub(amount),
+                                gsl[0],
+                                gsl[0].saturating_add(amount),
                             ]
                             .iter()
                             {
-                                for gsl2 in [
-                                    gsl[2].saturating_sub(amount),
-                                    gsl[2],
-                                    gsl[2].saturating_add(amount),
+                                for gsl1 in [
+                                    gsl[1].saturating_sub(amount),
+                                    gsl[1],
+                                    gsl[1].saturating_add(amount),
                                 ]
                                 .iter()
                                 {
-                                    let new = Self {
-                                        gene_weighting: [*g0, *g1, *g2, *g3],
-                                        start_location_gene_weighting: [*gsl0, *gsl1, *gsl2],
-                                    };
-                                    if *self != new {
-                                        altered[index] = new;
-                                        index += 1;
+                                    for gsl2 in [
+                                        gsl[2].saturating_sub(amount),
+                                        gsl[2],
+                                        gsl[2].saturating_add(amount),
+                                    ]
+                                    .iter()
+                                    {
+                                        let new = Self {
+                                            gene_weighting: [*g0, *g1, *g2, *g3, *g4],
+                                            start_location_gene_weighting: [*gsl0, *gsl1, *gsl2],
+                                        };
+                                        if *self != new {
+                                            altered[index] = new;
+                                            index += 1;
+                                        }
                                     }
                                 }
                             }
@@ -211,23 +226,35 @@ impl lib::Player for GeneticAI {
             let location = game.player_locations[player_id];
             let w1_is_near_player = game.is_near_player(player_id, location.0);
             let w2_is_near_player = game.is_near_player(player_id, location.1);
-            *actions
+            let action_scores = actions
                 .iter()
-                .max_by_key(|(worker, movement, build)| {
-                    self.get_score(
-                        game,
-                        player_id,
-                        *worker,
-                        *movement,
-                        *build,
-                        if *worker == lib::Worker::One {
-                            w1_is_near_player
-                        } else {
-                            w2_is_near_player
-                        },
-                    )
+                .map(|(worker, movement, build)| {
+                    ((*worker, *movement, *build), {
+                        self.get_score(
+                            game,
+                            player_id,
+                            *worker,
+                            *movement,
+                            *build,
+                            if *worker == lib::Worker::One {
+                                w1_is_near_player
+                            } else {
+                                w2_is_near_player
+                            },
+                        )
+                    })
                 })
-                .unwrap_or(&(lib::Worker::One, (0, 0), (0, 0)))
+                .collect::<Vec<(lib::Action, i32)>>();
+            if let Some((_, highest_score)) = action_scores.iter().max_by_key(|(_, score)| score) {
+                let options = action_scores
+                    .iter()
+                    .filter(|(_, score)| score == highest_score)
+                    .map(|(action, _)| *action)
+                    .collect::<Vec<lib::Action>>();
+                options[rand::thread_rng().gen_range(0, options.len())]
+            } else {
+                (lib::Worker::One, (0, 0), (0, 0))
+            }
         }
     }
     fn get_starting_position(

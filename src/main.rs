@@ -204,7 +204,7 @@ fn main() {
         Box::new(random_choice_player::RandomChoice::new()),
         Box::new(first_choice_player::FirstChoice::new()),
     ];
-    let result = genetic_ai::train(players, 50, 1);
+    let result = genetic_ai::train(players, 10, 1);
     println!(
         "{:?}",
         result
