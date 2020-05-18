@@ -177,4 +177,25 @@ mod tests {
         });
         assert_eq!(action.unwrap().1, (0, 1));
     }
+    #[test]
+    fn prioritize_climbing_scores_drop_lowest() {
+        let game = Game {
+            board: [
+                [TS1, TSE, TS1, TS1, TS1],
+                [TS1; 5],
+                [TS1; 5],
+                [TS1; 5],
+                [TS1; 5],
+            ],
+            player_locations: [((0, 0), (3, 3)), ((17, 17), (17, 17)), ((17, 17), (17, 17))],
+
+            player_statuses: [Status::Playing, Status::Dead, Status::Dead],
+        };
+        let climbing = PrioritizeClimbing {};
+        let actions = game.list_possible_actions(0);
+        let action = actions.iter().min_by_key(|(worker, movement, build)| {
+            climbing.get_score(&game, 0, *worker, *movement, *build, false, false, false)
+        });
+        assert_eq!(action.unwrap().1, (0, 1));
+    }
 }
