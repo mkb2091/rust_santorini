@@ -82,6 +82,7 @@ pub enum Status {
     Dead,
 }
 
+#[derive(Copy, Clone)]
 pub struct Game {
     pub board: [[TowerStates; 5]; 5],
     pub player_locations: [((u8, u8), (u8, u8)); 3],
@@ -99,13 +100,12 @@ impl Game {
 
         move_x <= 4
             && move_y <= 4
-            && !self
+            && self
                 .player_locations
                 .iter()
                 .enumerate()
-                .any(|(i, (w1, w2))| {
-                    self.player_statuses[i] == Status::Playing && movement == *w1 || movement == *w2
-                })
+                .filter(|(i, _)| self.player_statuses[*i] == Status::Playing)
+                .all(|(_, (w1, w2))| movement != *w1 && movement != *w2)
             && (self.board[base_worker.0 as usize][base_worker.1 as usize].to_int() as i8
                 - self.board[move_x as usize][move_y as usize].to_int() as i8)
                 >= -1
@@ -133,15 +133,12 @@ impl Game {
             && ((worker == Worker::One && build != old_w2)
                 || (worker == Worker::Two && build != old_w1))
             && (checked_movement || self.can_move_to_square(player_id, worker, movement))
-            && !self
+            && self
                 .player_locations
                 .iter()
                 .enumerate()
-                .any(|(i, (w1, w2))| {
-                    self.player_statuses[i] == Status::Playing
-                        && (build == *w1 || build == *w2)
-                        && i != player_id
-                })
+                .filter(|(i, _)| self.player_statuses[*i] == Status::Playing && *i != player_id)
+                .all(|(_, (w1, w2))| (build != *w1 && build != *w2))
             && movement != build
             && (move_x as i8 - build_x as i8).abs() <= 1
             && (move_y as i8 - build_y as i8).abs() <= 1
