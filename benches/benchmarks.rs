@@ -35,6 +35,20 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("list_possible_actions_where_trapped", |b| {
         b.iter(|| black_box(game).list_possible_actions(0))
     });
+        let game = Game {
+        board: [
+            [TS2; 5],
+            [TS2; 5],
+            [TS2, TS2, TSE, TSE, TSE],
+            [TS2; 5],
+            [TS2; 5],
+        ],
+        player_locations: [((2, 2), (2, 3)), ((17, 17), (17, 17)), ((17, 17), (17, 17))],
+        player_statuses: [Status::Playing, Status::Dead, Status::Dead],
+    };
+    c.bench_function("list_possible_actions_where_only_one_option", |b| {
+        b.iter(|| black_box(game).list_possible_actions(0))
+    });
 }
 
 criterion_group!(benches, criterion_benchmark);
