@@ -10,7 +10,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         player_statuses: [Status::Playing, Status::Dead, Status::Dead],
     };
     c.bench_function("list_possible_actions_on_empty", |b| {
-        b.iter(|| game.list_possible_actions(0))
+        b.iter(|| black_box(game).list_possible_actions(0))
     });
     let game = Game {
         board: [[TowerStates::Empty; 5]; 5],
@@ -18,7 +18,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         player_statuses: [Status::Playing, Status::Dead, Status::Dead],
     };
     c.bench_function("list_possible_actions_on_empty_near_edge", |b| {
-        b.iter(|| game.list_possible_actions(0))
+        b.iter(|| black_box(game).list_possible_actions(0))
     });
 
     let game = Game {
@@ -33,7 +33,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         player_statuses: [Status::Playing, Status::Dead, Status::Dead],
     };
     c.bench_function("list_possible_actions_where_trapped", |b| {
-        b.iter(|| game.list_possible_actions(0))
+        b.iter(|| black_box(game).list_possible_actions(0))
     });
 }
 
