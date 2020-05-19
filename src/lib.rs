@@ -91,28 +91,28 @@ pub struct Game {
 impl Game {
     pub fn can_move_to_square(&self, player_id: usize, worker: Worker, movement: (u8, u8)) -> bool {
         let (move_x, move_y) = movement;
-        if move_x > 4 || move_y > 4 {
-            return false;
-        }
-        for (i, (w1, w2)) in self.player_locations.iter().enumerate() {
-            if self.player_statuses[i] == Status::Playing {
-                if (move_x, move_y) == *w1 || (move_x, move_y) == *w2 {
-                    // Check if player is moving into an already occupied block
-                    return false;
-                }
-            }
-        }
         let base_worker = if worker == Worker::One {
             self.player_locations[player_id].0
         } else {
             self.player_locations[player_id].1
         };
-        !(((base_worker.0 as i8 - move_x as i8).abs() > 1)
-            || ((base_worker.1 as i8 - move_y as i8).abs() > 1)
-            || ((self.board[base_worker.0 as usize][base_worker.1 as usize].to_int() as i8
+
+        move_x <= 4
+            && move_y <= 4
+            && !self
+                .player_locations
+                .iter()
+                .enumerate()
+                .any(|(i, (w1, w2))| {
+                    self.player_statuses[i] == Status::Playing && movement == *w1 || movement == *w2
+                })
+            && movement != base_worker
+            && (base_worker.0 as i8 - move_x as i8).abs() <= 1
+            && (base_worker.1 as i8 - move_y as i8).abs() <= 1
+            && (self.board[base_worker.0 as usize][base_worker.1 as usize].to_int() as i8
                 - self.board[move_x as usize][move_y as usize].to_int() as i8)
-                < -1)
-            || (self.board[move_x as usize][move_y as usize] == TowerStates::Capped))
+                >= -1
+            && self.board[move_x as usize][move_y as usize] != TowerStates::Capped
     }
     pub fn is_valid(
         &self,
@@ -122,15 +122,11 @@ impl Game {
         build: (u8, u8),
         checked_movement: bool,
     ) -> bool {
-        if !checked_movement && !self.can_move_to_square(player_id, worker, movement) {
-            return false;
-        }
         let (move_x, move_y) = movement;
         let (build_x, build_y) = build;
-        if build_x > 4 || build_y > 4 {
-            return false;
-        }
+
         let (old_w1, old_w2) = self.player_locations[player_id];
+
         if worker == Worker::One {
             if build == old_w2 {
                 return false;
@@ -140,17 +136,20 @@ impl Game {
                 return false;
             }
         }
-        for (i, (w1, w2)) in self.player_locations.iter().enumerate() {
-            if self.player_statuses[i] == Status::Playing {
-                if i != player_id {
-                    if build == *w1 || build == *w2 {
-                        // Check if player is building on an already occupied block
-                        return false;
-                    }
-                }
-            }
-        }
-        movement != build
+
+        (checked_movement || self.can_move_to_square(player_id, worker, movement))
+            && build_x <= 4
+            && build_y <= 4
+            && !self
+                .player_locations
+                .iter()
+                .enumerate()
+                .any(|(i, (w1, w2))| {
+                    self.player_statuses[i] == Status::Playing
+                        && (build == *w1 || build == *w2)
+                        && i != player_id
+                })
+            && movement != build
             && (move_x as i8 - build_x as i8).abs() <= 1
             && (move_y as i8 - build_y as i8).abs() <= 1
             && self.board[build_x as usize][build_y as usize] != TowerStates::Capped
@@ -353,7 +352,7 @@ pub fn main_loop(player_controls: [Option<&dyn Player>; 3]) -> Option<usize> {
                 ) {
                     if game.board[move_x as usize][move_y as usize] == TowerStates::Level3 {
                         //println!("Player {} won", player_id);
-                        game.print_board();
+                        //game.print_board();
                         return Some(player_id);
                     }
                     if worker == Worker::One {
