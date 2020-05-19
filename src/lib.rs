@@ -112,7 +112,8 @@ impl Game {
             && (self.board[base_worker.0 as usize][base_worker.1 as usize].to_int() as i8
                 - self.board[move_x as usize][move_y as usize].to_int() as i8)
                 >= -1
-            && self.board[move_x as usize][move_y as usize] != TowerStates::Capped
+        //&& self.board[move_x as usize][move_y as usize] != TowerStates::Capped
+        // Not needed as to get onto a capped tower, would have to already be at level 3, which wins the game.
     }
     pub fn is_valid(
         &self,
@@ -127,19 +128,11 @@ impl Game {
 
         let (old_w1, old_w2) = self.player_locations[player_id];
 
-        if worker == Worker::One {
-            if build == old_w2 {
-                return false;
-            }
-        } else {
-            if build == old_w1 {
-                return false;
-            }
-        }
-
-        (checked_movement || self.can_move_to_square(player_id, worker, movement))
-            && build_x <= 4
+        build_x <= 4
             && build_y <= 4
+            && ((worker == Worker::One && build != old_w2)
+                || (worker == Worker::Two && build != old_w1))
+            && (checked_movement || self.can_move_to_square(player_id, worker, movement))
             && !self
                 .player_locations
                 .iter()
