@@ -242,32 +242,15 @@ impl Game {
         possible_actions
     }
     pub fn is_near_player(&self, player_id: usize, pos: (u8, u8)) -> bool {
-        let is_near = self
-            .player_locations
+        self.player_locations
             .iter()
             .enumerate()
-            .filter(|(player, _)| *player != player_id)
+            .filter(|(i, _)| self.player_statuses[*i] == Status::Playing && *i != player_id)
             .any(|(_, (w1, w2))| {
                 ((w1.0 as i8 - pos.0 as i8).abs() <= 1 && (w1.1 as i8 - pos.1 as i8).abs() <= 1)
                     || ((w2.0 as i8 - pos.0 as i8).abs() <= 1
                         && (w2.1 as i8 - pos.1 as i8).abs() <= 1)
-            });
-        debug_assert_eq!(is_near, {
-            let mut near_player = false;
-            for (player, (w1, w2)) in self.player_locations.iter().enumerate() {
-                if player != player_id {
-                    for &ow in &[w1, w2] {
-                        if (ow.0 as i8 - pos.0 as i8).abs() <= 1
-                            && (ow.1 as i8 - pos.1 as i8).abs() <= 1
-                        {
-                            near_player = true;
-                        }
-                    }
-                }
-            }
-            near_player
-        });
-        true
+            })
     }
 }
 
@@ -380,5 +363,32 @@ mod tests {
             player_statuses: [Status::Playing, Status::Dead, Status::Dead],
         };
         assert_eq!(game.list_possible_actions(0).len(), 64);
+    }
+    #[test]
+    fn is_near_player_returns_false_when_not() {
+        let game = Game {
+            board: [[TowerStates::Empty; 5]; 5],
+            player_locations: [((2, 2), (2, 3)), ((17, 17), (17, 17)), ((17, 17), (17, 17))],
+            player_statuses: [Status::Playing, Status::Dead, Status::Dead],
+        };
+        assert_eq!(game.is_near_player(0, (3, 4)), false);
+    }
+    #[test]
+    fn is_near_player_returns_true_when_near_player() {
+        let game = Game {
+            board: [[TowerStates::Empty; 5]; 5],
+            player_locations: [((2, 2), (2, 3)), ((4, 2), (4, 3)), ((17, 17), (17, 17))],
+            player_statuses: [Status::Playing, Status::Playing, Status::Dead],
+        };
+        assert_eq!(game.is_near_player(0, (3, 4)), true);
+    }
+    #[test]
+    fn is_near_player_returns_false_when_only_near_player_is_dead() {
+        let game = Game {
+            board: [[TowerStates::Empty; 5]; 5],
+            player_locations: [((2, 2), (2, 3)), ((4, 2), (4, 3)), ((17, 17), (17, 17))],
+            player_statuses: [Status::Playing, Status::Dead, Status::Dead],
+        };
+        assert_eq!(game.is_near_player(0, (3, 4)), false);
     }
 }
