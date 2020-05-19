@@ -4,15 +4,14 @@ use crate::start_location_score_algorithms;
 use rand::prelude::*;
 use rayon::prelude::*;
 
-const GENE_COUNT: usize = 5;
+const GENE_COUNT: usize = 4;
 const START_LOCATION_GENE_COUNT: usize = 3;
-const TOTAL_PERMUTATIONS: usize = (3 * 3 * 3 * 3 * 3) * (3 * 3 * 3) - 1;
+const TOTAL_PERMUTATIONS: usize = (3 * 3 * 3 * 3) * (3 * 3 * 3) - 1;
 lazy_static! {
     static ref GENES: [std::sync::Arc<dyn ActionScorer>; GENE_COUNT] = [
         std::sync::Arc::new(action_score_algorithms::PrioritizeClimbing {}),
         std::sync::Arc::new(action_score_algorithms::PrioritizeCapping {}),
         std::sync::Arc::new(action_score_algorithms::PrioritizeBlocking {}),
-        std::sync::Arc::new(action_score_algorithms::PrioritizeBuildingLow {}),
         std::sync::Arc::new(action_score_algorithms::PrioritizeNextToPlayer {}),
     ];
     static ref START_LOCATION_GENES: [std::sync::Arc<dyn StartScorer>; START_LOCATION_GENE_COUNT] = [
@@ -55,7 +54,7 @@ pub struct GeneticAI {
 impl GeneticAI {
     pub fn new() -> Self {
         Self {
-            gene_weighting: [0, 0, 0, 0, 0],
+            gene_weighting: [0, 0, 0, 0],
             start_location_gene_weighting: [0, 0, 0],
         }
     }
@@ -71,6 +70,9 @@ impl GeneticAI {
         build: (u8, u8),
         is_near_player: bool,
     ) -> i32 {
+        if game.board[movement.0 as usize][movement.1 as usize] == lib::TowerStates::Level3 {
+            return std::i32::MAX;
+        }
         let will_be_near_player = game.is_near_player(player_id, movement);
         let will_build_near_player = game.is_near_player(player_id, build);
         GENES
@@ -123,7 +125,6 @@ impl GeneticAI {
             rng.gen_range(0, 10),
             rng.gen_range(0, 10),
             rng.gen_range(0, 10),
-            rng.gen_range(0, 10),
         ];
         let start_location_gene_weighting = [
             rng.gen_range(0, 10),
@@ -170,42 +171,34 @@ impl GeneticAI {
                     ]
                     .iter()
                     {
-                        for g4 in [
-                            g[4].saturating_sub(amount),
-                            g[4],
-                            g[4].saturating_add(amount),
+                        for gsl0 in [
+                            gsl[0].saturating_sub(amount),
+                            gsl[0],
+                            gsl[0].saturating_add(amount),
                         ]
                         .iter()
                         {
-                            for gsl0 in [
-                                gsl[0].saturating_sub(amount),
-                                gsl[0],
-                                gsl[0].saturating_add(amount),
+                            for gsl1 in [
+                                gsl[1].saturating_sub(amount),
+                                gsl[1],
+                                gsl[1].saturating_add(amount),
                             ]
                             .iter()
                             {
-                                for gsl1 in [
-                                    gsl[1].saturating_sub(amount),
-                                    gsl[1],
-                                    gsl[1].saturating_add(amount),
+                                for gsl2 in [
+                                    gsl[2].saturating_sub(amount),
+                                    gsl[2],
+                                    gsl[2].saturating_add(amount),
                                 ]
                                 .iter()
                                 {
-                                    for gsl2 in [
-                                        gsl[2].saturating_sub(amount),
-                                        gsl[2],
-                                        gsl[2].saturating_add(amount),
-                                    ]
-                                    .iter()
-                                    {
-                                        let new = Self {
-                                            gene_weighting: [*g0, *g1, *g2, *g3, *g4],
-                                            start_location_gene_weighting: [*gsl0, *gsl1, *gsl2],
-                                        };
-                                        if *self != new {
-                                            altered[index] = new;
-                                            index += 1;
-                                        }
+                                    let new = Self {
+                                        gene_weighting: [*g0, *g1, *g2, *g3],
+                                        start_location_gene_weighting: [*gsl0, *gsl1, *gsl2],
+                                    };
+                                    if *self != new {
+                                        altered[index] = new;
+                                        index += 1;
                                     }
                                 }
                             }
@@ -354,12 +347,13 @@ pub fn train(
             } else {
                 let accepted = old_score >= (players.len() + ais.len()) * matches;
                 println!(
-                    "{} new score {} (out of {}) at iteration {} after {} generations",
+                    "{} new score {} (out of {}) at iteration {} after {} generations\n{:?}",
                     if accepted { "Accepted" } else { "Rejected" },
                     old_score,
                     (players.len() + ais.len()) * matches * 2,
                     iteration,
-                    generations
+                    generations,
+                    old_ai
                 );
                 if accepted {
                     ais_for_testing.push(Box::new(old_ai));

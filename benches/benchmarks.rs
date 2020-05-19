@@ -35,7 +35,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("list_possible_actions_where_trapped", |b| {
         b.iter(|| black_box(game).list_possible_actions(0))
     });
-        let game = Game {
+    let game = Game {
         board: [
             [TS2; 5],
             [TS2; 5],

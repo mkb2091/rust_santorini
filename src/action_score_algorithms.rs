@@ -101,27 +101,6 @@ impl ActionScorer for PrioritizeBlocking {
     }
 }
 
-pub struct PrioritizeBuildingLow {}
-impl ActionScorer for PrioritizeBuildingLow {
-    fn get_score(
-        &self,
-        game: &lib::Game,
-        _player_id: usize,
-        _worker: lib::Worker,
-        _m: (u8, u8),
-        b: (u8, u8),
-        _is_near_player: bool,
-        _will_be_near_player: bool,
-        will_build_near_player: bool,
-    ) -> i32 {
-        if will_build_near_player {
-            -1 - (game.board[b.0 as usize][b.1 as usize].to_int() as i32)
-        } else {
-            0
-        }
-    }
-}
-
 pub struct PrioritizeNextToPlayer {}
 impl ActionScorer for PrioritizeNextToPlayer {
     fn get_score(
