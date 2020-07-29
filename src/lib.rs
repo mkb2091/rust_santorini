@@ -1,3 +1,9 @@
+mod action_score_algorithms;
+mod first_choice_player;
+pub mod genetic_ai;
+mod random_choice_player;
+mod start_location_score_algorithms;
+
 pub type Action = (Worker, (u8, u8), (u8, u8));
 pub type StartLocation = ((u8, u8), (u8, u8));
 
@@ -12,7 +18,7 @@ pub trait Player: Send + Sync {
     ) -> StartLocation;
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, serde::Serialize, serde::Deserialize)]
 pub enum TowerStates {
     Empty,
     Level1,
@@ -61,7 +67,7 @@ impl std::cmp::PartialOrd for TowerStates {
     }
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Worker {
     One,
     Two,
@@ -76,13 +82,13 @@ impl ToString for Worker {
         .to_string()
     }
 }
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Status {
     Playing,
     Dead,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Game {
     pub board: [[TowerStates; 5]; 5],
     pub player_locations: [((u8, u8), (u8, u8)); 3],
@@ -254,7 +260,11 @@ impl Game {
     }
 }
 
-pub fn main_loop(player_controls: [Option<&dyn Player>; 3]) -> Option<usize> {
+pub fn main_loop(
+    player_controls: [Option<&dyn Player>; 3],
+    print_board: bool,
+    record_moves: &mut Option<[Vec<(Game, Action)>; 3]>,
+) -> usize {
     let mut game = Game {
         board: [[TowerStates::Empty; 5]; 5],
         player_locations: [((17, 17), (17, 17)); 3],
@@ -299,11 +309,7 @@ pub fn main_loop(player_controls: [Option<&dyn Player>; 3]) -> Option<usize> {
         }
     }
 
-    while game
-        .player_statuses
-        .iter()
-        .any(|&status| status == Status::Playing)
-    {
+    loop {
         let players: Vec<usize> = game
             .player_statuses
             .iter()
@@ -313,6 +319,9 @@ pub fn main_loop(player_controls: [Option<&dyn Player>; 3]) -> Option<usize> {
             .collect();
         for &player_id in players.iter() {
             if let Some(player) = &player_controls[player_id] {
+                if print_board {
+                    game.print_board();
+                }
                 let (worker, (move_x, move_y), (build_x, build_y)) =
                     player.get_action(&game, player_id);
 
@@ -323,10 +332,14 @@ pub fn main_loop(player_controls: [Option<&dyn Player>; 3]) -> Option<usize> {
                     (build_x, build_y),
                     false,
                 ) {
+                    if let Some(action_history) = record_moves {
+                        action_history[player_id]
+                            .push((game, (worker, (move_x, move_y), (build_x, build_y))));
+                    }
                     if game.board[move_x as usize][move_y as usize] == TowerStates::Level3 {
                         //println!("Player {} won", player_id);
                         //game.print_board();
-                        return Some(player_id);
+                        return player_id;
                     }
                     if worker == Worker::One {
                         game.player_locations[player_id].0 = (move_x, move_y);
@@ -340,11 +353,26 @@ pub fn main_loop(player_controls: [Option<&dyn Player>; 3]) -> Option<usize> {
                 } else {
                     //println!("Not a valid move");
                     game.player_statuses[player_id] = Status::Dead;
+                    if game
+                        .player_statuses
+                        .iter()
+                        .filter(|&status| *status == Status::Playing)
+                        .map(|_| 1)
+                        .sum::<usize>()
+                        == 1
+                    {
+                        return game
+                            .player_statuses
+                            .iter()
+                            .enumerate()
+                            .find(|(_, &status)| status == Status::Playing)
+                            .unwrap()
+                            .0;
+                    }
                 }
             }
         }
     }
-    None
 }
 
 #[cfg(test)]

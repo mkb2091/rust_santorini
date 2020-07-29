@@ -1,70 +1,85 @@
 use crate::genetic_ai::ActionScorer;
-use crate::lib;
+use crate::*;
 
 pub struct PrioritizeClimbing {}
+impl PrioritizeClimbing {
+    pub const fn new() -> Self {
+        Self {}
+    }
+}
 impl ActionScorer for PrioritizeClimbing {
     fn get_score(
         &self,
-        game: &lib::Game,
+        game: &Game,
         player_id: usize,
-        worker: lib::Worker,
+        worker: Worker,
         movement: (u8, u8),
         _build: (u8, u8),
         _is_near_player: bool,
         _will_be_near_player: bool,
         _will_build_near_player: bool,
-    ) -> i32 {
+    ) -> f32 {
         let (w1, w2) = game.player_locations[player_id];
-        let old_pos = if worker == lib::Worker::One { w1 } else { w2 };
-        (game.board[movement.0 as usize][movement.1 as usize].to_int() as i32)
-            - (game.board[old_pos.0 as usize][old_pos.1 as usize].to_int() as i32)
+        let old_pos = if worker == Worker::One { w1 } else { w2 };
+        (game.board[movement.0 as usize][movement.1 as usize].to_int() as f32)
+            - (game.board[old_pos.0 as usize][old_pos.1 as usize].to_int() as f32)
     }
 }
 
 pub struct PrioritizeCapping {}
+impl PrioritizeCapping {
+    pub const fn new() -> Self {
+        Self {}
+    }
+}
 impl ActionScorer for PrioritizeCapping {
     fn get_score(
         &self,
-        game: &lib::Game,
+        game: &Game,
         _player_id: usize,
-        _worker: lib::Worker,
+        _worker: Worker,
         _movement: (u8, u8),
         b: (u8, u8),
         _is_near_player: bool,
         _will_be_near_player: bool,
         will_build_near_player: bool,
-    ) -> i32 {
-        if game.board[b.0 as usize][b.1 as usize] == lib::TowerStates::Level3 {
+    ) -> f32 {
+        if game.board[b.0 as usize][b.1 as usize] == TowerStates::Level3 {
             if will_build_near_player {
-                1
+                1.0
             } else {
-                -1
+                -1.0
             }
         } else if will_build_near_player {
-            -1
+            -1.0
         } else {
-            0
+            0.0
         }
     }
 }
 
 pub struct PrioritizeBlocking {}
+impl PrioritizeBlocking {
+    pub const fn new() -> Self {
+        Self {}
+    }
+}
 impl ActionScorer for PrioritizeBlocking {
     fn get_score(
         &self,
-        game: &lib::Game,
+        game: &Game,
         player_id: usize,
-        worker: lib::Worker,
+        worker: Worker,
         movement: (u8, u8),
         b: (u8, u8),
         _is_near_player: bool,
         _will_be_near_player: bool,
         will_build_near_player: bool,
-    ) -> i32 {
+    ) -> f32 {
         if will_build_near_player {
             let mut max_near_height = 0;
             let (mut w1, mut w2) = game.player_locations[player_id];
-            if worker == lib::Worker::One {
+            if worker == Worker::One {
                 w1 = movement;
             } else {
                 w2 = movement;
@@ -88,42 +103,47 @@ impl ActionScorer for PrioritizeBlocking {
 
             let current_height = game.board[b.0 as usize][b.1 as usize].to_int();
             match current_height as i8 - max_near_height as i8 {
-                3 => -2,  // No need to dome towers that aren't surrounded
-                2 => -2,  // See above
-                1 => 2,   // Will result in blocking access
-                0 => -3,  // Makes a step up for opponents
-                -1 => -2, // Making a same height building for opponents
-                _ => -1,  // No harm or benefit from filling in hole
+                3 => -2.0,  // No need to dome towers that aren't surrounded
+                2 => -2.0,  // See above
+                1 => 2.0,   // Will result in blocking access
+                0 => -3.0,  // Makes a step up for opponents
+                -1 => -2.0, // Making a same height building for opponents
+                _ => -1.0,  // No harm or benefit from filling in hole
             }
         } else {
-            0
+            0.0
         }
     }
 }
 
 pub struct PrioritizeNextToPlayer {}
+impl PrioritizeNextToPlayer {
+    pub const fn new() -> Self {
+        Self {}
+    }
+}
 impl ActionScorer for PrioritizeNextToPlayer {
     fn get_score(
         &self,
-        _game: &lib::Game,
+        _game: &Game,
         _player_id: usize,
-        _worker: lib::Worker,
+        _worker: Worker,
         _m: (u8, u8),
         _build: (u8, u8),
         is_near_player: bool,
         will_be_near_player: bool,
         _will_build_near_player: bool,
-    ) -> i32 {
+    ) -> f32 {
         if is_near_player {
             if will_be_near_player {
-                0
+                0.0
             } else {
-                -1
+                -1.0
             }
         } else if will_be_near_player {
-            1
+            1.0
         } else {
-            -1
+            -1.0
         }
     }
 }
@@ -131,7 +151,7 @@ impl ActionScorer for PrioritizeNextToPlayer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lib::{Game, Status, TowerStates};
+    use crate::{Game, Status, TowerStates};
     const TSE: TowerStates = TowerStates::Empty;
     const TS1: TowerStates = TowerStates::Level1;
 
@@ -151,10 +171,15 @@ mod tests {
         };
         let climbing = PrioritizeClimbing {};
         let actions = game.list_possible_actions(0);
-        let action = actions.iter().max_by_key(|(worker, movement, build)| {
-            climbing.get_score(&game, 0, *worker, *movement, *build, false, false, false)
-        });
-        assert_eq!(action.unwrap().1, (0, 1));
+        let mut max = ((Worker::One, (0, 0), (0, 0)), f32::MIN);
+        for action in actions.iter() {
+            let score =
+                climbing.get_score(&game, 0, action.0, action.1, action.2, false, false, false);
+            if score > max.1 {
+                max = (*action, score);
+            }
+        }
+        assert_eq!((max.0).1, (0, 1));
     }
     #[test]
     fn prioritize_climbing_scores_drop_lowest() {
@@ -172,9 +197,14 @@ mod tests {
         };
         let climbing = PrioritizeClimbing {};
         let actions = game.list_possible_actions(0);
-        let action = actions.iter().min_by_key(|(worker, movement, build)| {
-            climbing.get_score(&game, 0, *worker, *movement, *build, false, false, false)
-        });
-        assert_eq!(action.unwrap().1, (0, 1));
+        let mut max = ((Worker::One, (0, 0), (0, 0)), f32::MAX);
+        for action in actions.iter() {
+            let score =
+                climbing.get_score(&game, 0, action.0, action.1, action.2, false, false, false);
+            if score < max.1 {
+                max = (*action, score);
+            }
+        }
+        assert_eq!((max.0).1, (0, 1));
     }
 }

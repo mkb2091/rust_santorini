@@ -1,12 +1,8 @@
-mod action_score_algorithms;
-mod first_choice_player;
-mod genetic_ai;
-mod lib;
-mod random_choice_player;
-mod start_location_score_algorithms;
+use rust_santorini::*;
 
-#[macro_use]
-extern crate lazy_static;
+use rand::Rng;
+use std::io::BufRead;
+use std::io::Write;
 
 struct RealPlayer {}
 
@@ -16,17 +12,16 @@ impl RealPlayer {
     }
 }
 
-impl lib::Player for RealPlayer {
-    fn get_action(&self, game: &lib::Game, player_id: usize) -> lib::Action {
-        game.print_board();
+impl Player for RealPlayer {
+    fn get_action(&self, game: &Game, player_id: usize) -> Action {
         println!("Player: {}", player_id);
         let possible_actions = game.list_possible_actions(player_id);
         if possible_actions.is_empty() {
             println!("No possible moves left");
-            return (lib::Worker::One, (0, 0), (0, 0));
+            return (Worker::One, (0, 0), (0, 0));
         }
         loop {
-            let worker: lib::Worker = {
+            let worker: Worker = {
                 println!("Enter which worker to select");
                 let mut input = String::new();
                 match std::io::stdin().read_line(&mut input) {
@@ -34,12 +29,12 @@ impl lib::Player for RealPlayer {
                     Err(error) => println!("Error: {}", error),
                 }
                 match &input.trim().to_lowercase() as &str {
-                    "o" => lib::Worker::One,
-                    "one" => lib::Worker::One,
-                    "1" => lib::Worker::One,
-                    "t" => lib::Worker::Two,
-                    "two" => lib::Worker::Two,
-                    "2" => lib::Worker::Two,
+                    "o" => Worker::One,
+                    "one" => Worker::One,
+                    "1" => Worker::One,
+                    "t" => Worker::Two,
+                    "two" => Worker::Two,
+                    "2" => Worker::Two,
                     _ => {
                         println!("Not a valid worker, can be either one or two");
                         continue;
@@ -124,9 +119,9 @@ impl lib::Player for RealPlayer {
     }
     fn get_starting_position(
         &self,
-        game: &lib::Game,
-        player_locations: &[lib::StartLocation],
-    ) -> lib::StartLocation {
+        game: &Game,
+        player_locations: &[StartLocation],
+    ) -> StartLocation {
         game.print_board();
         loop {
             let w1 = {
@@ -199,32 +194,63 @@ impl lib::Player for RealPlayer {
 }
 
 fn main() {
-    //let player1 = RealPlayer::new();
-    let players: Vec<Box<(dyn lib::Player)>> = vec![
-        Box::new(random_choice_player::RandomChoice::new()),
-        Box::new(first_choice_player::FirstChoice::new()),
-    ];
-    let result = genetic_ai::train(players, 10, 1);
-    println!(
-        "{:?}",
-        result
-            .iter()
-            .map(|x| (x.gene_weighting, x.start_location_gene_weighting))
-            .fold(((0, 0, 0, 0), (0, 0)), |a, x| (
-                (
-                    (a.0).0 + (x.0)[0],
-                    (a.0).1 + (x.0)[1],
-                    (a.0).2 + (x.0)[2],
-                    (a.0).3 + (x.0)[3]
-                ),
-                ((a.1).0 + (x.1)[0], (a.1).1 + (x.1)[1])
-            ))
-    );
-    println!("{:?}", result[0]);
-    let player2: &dyn lib::Player = &RealPlayer::new();
-    let player1: &dyn lib::Player = &result[0];
-    let players: [Option<&dyn lib::Player>; 3] = [Some(player1), Some(player2), None];
-    if let Some(result) = lib::main_loop(players) {
-        println!("Player {} won the game", result);
+    let mut line = String::new();
+    let mut training_data: Vec<genetic_ai::TrainingData> = Vec::new();
+    if let Ok(file) = std::fs::File::open("training_data.json") {
+        let mut buf = std::io::BufReader::new(file);
+        while buf.read_line(&mut line).unwrap() > 0 {
+            if let Ok(deserialized) = serde_json::from_str(&line) {
+                training_data.push(deserialized);
+            } else {
+                println!("Failed to parse: {}", line);
+            }
+            line.clear();
+        }
+    } else {
+        println!("Failed to load training data");
+    }
+
+    let mut new_ai =
+        genetic_ai::GeneticAI::<genetic_ai::Tanh>::create_random(&mut rand::thread_rng());
+    new_ai.learn(&training_data);
+    // new_ai.self_train(100, 10);
+    // new_ai.learn(&training_data);
+    // new_ai.train(
+    //     vec![Box::new(random_choice_player::RandomChoice::new())],
+    //     100,
+    //     10,
+    // );
+    // new_ai.train(
+    //     vec![Box::new(genetic_ai::GeneticAI::<genetic_ai::Tanh>::new())],
+    //     100,
+    //     10,
+    // );
+    println!("{:?}", new_ai);
+    let player2: &dyn Player = &RealPlayer::new();
+    let player1: &dyn Player = &new_ai;
+
+    let mut action_history: Option<[Vec<(Game, Action)>; 3]> = Some([vec![], vec![], vec![]]);
+    let players: [Option<&dyn Player>; 3] = if rand::thread_rng().gen::<bool>() {
+        [Some(player1), Some(player2), None]
+    } else {
+        [Some(player2), Some(player1), None]
+    };
+    let result = main_loop(players, true, &mut action_history);
+    println!("Player {} won the game", result);
+    for (player_id, action_list) in action_history.unwrap().iter().enumerate() {
+        for (game, action) in action_list.iter() {
+            training_data.push((player_id == result, player_id, *game, *action));
+        }
+    }
+    if let Ok(file) = std::fs::File::create("training_data.json") {
+        let mut buf = std::io::LineWriter::new(file);
+
+        for td in training_data.iter() {
+            buf.write(&serde_json::to_string(&td).unwrap().as_bytes())
+                .unwrap();
+            buf.write(&[b'\n']).unwrap();
+        }
+    } else {
+        println!("Failed to write training data");
     }
 }

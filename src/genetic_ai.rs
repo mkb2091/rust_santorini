@@ -1,38 +1,42 @@
-use crate::action_score_algorithms;
-use crate::lib;
-use crate::start_location_score_algorithms;
+use crate::*;
 use rand::prelude::*;
 use rayon::prelude::*;
 
-const GENE_COUNT: usize = 4;
+use rand::seq::SliceRandom;
+
+const GENE_COUNT: usize = 5;
 const START_LOCATION_GENE_COUNT: usize = 3;
-const TOTAL_PERMUTATIONS: usize = (3 * 3 * 3 * 3) * (3 * 3 * 3) - 1;
-lazy_static! {
-    static ref GENES: [std::sync::Arc<dyn ActionScorer>; GENE_COUNT] = [
-        std::sync::Arc::new(action_score_algorithms::PrioritizeClimbing {}),
-        std::sync::Arc::new(action_score_algorithms::PrioritizeCapping {}),
-        std::sync::Arc::new(action_score_algorithms::PrioritizeBlocking {}),
-        std::sync::Arc::new(action_score_algorithms::PrioritizeNextToPlayer {}),
-    ];
-    static ref START_LOCATION_GENES: [std::sync::Arc<dyn StartScorer>; START_LOCATION_GENE_COUNT] = [
-        std::sync::Arc::new(start_location_score_algorithms::StartNearPlayers {}),
-        std::sync::Arc::new(start_location_score_algorithms::StartNearMiddle {}),
-        std::sync::Arc::new(start_location_score_algorithms::StartAwayFromOtherWorker {}),
-    ];
-}
+const LEARNING_LOOP_COUNT: usize = 20000;
+
+const STEP_SIZE: f32 = 0.001;
+
+const GENES: [&'static dyn ActionScorer; GENE_COUNT - 1] = [
+    &action_score_algorithms::PrioritizeClimbing::new(),
+    &action_score_algorithms::PrioritizeCapping::new(),
+    &action_score_algorithms::PrioritizeBlocking::new(),
+    &action_score_algorithms::PrioritizeNextToPlayer::new(),
+];
+
+const START_LOCATION_GENES: [&dyn StartScorer; START_LOCATION_GENE_COUNT] = [
+    &start_location_score_algorithms::StartNearPlayers::new(),
+    &start_location_score_algorithms::StartNearMiddle::new(),
+    &start_location_score_algorithms::StartAwayFromOtherWorker::new(),
+];
+
+pub type TrainingData = (bool, usize, Game, Action);
 
 pub trait ActionScorer: Sync + Send {
     fn get_score(
         &self,
-        game: &lib::Game,
+        game: &Game,
         player_id: usize,
-        worker: lib::Worker,
+        worker: Worker,
         movement: (u8, u8),
         build: (u8, u8),
         is_near_player: bool,
         will_be_near_player: bool,
         will_build_near_player: bool,
-    ) -> i32;
+    ) -> f32;
 }
 
 pub trait StartScorer: Sync + Send {
@@ -41,57 +45,111 @@ pub trait StartScorer: Sync + Send {
         player_locations: &[((u8, u8), (u8, u8))],
         start_locations: (u8, u8),
         other_starting_location: Option<(u8, u8)>,
-    ) -> i32;
+    ) -> f32;
+}
+
+pub trait ActivationFunction:
+    std::marker::Sync + std::marker::Send + std::fmt::Debug + std::marker::Copy + Clone
+{
+    fn activation(x: f32) -> f32;
+    fn inverse_activation(x: f32) -> f32;
+    fn activation_derivative(x: f32) -> f32;
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Tanh {}
+impl ActivationFunction for Tanh {
+    fn activation(x: f32) -> f32 {
+        x.tanh()
+    }
+    fn inverse_activation(x: f32) -> f32 {
+        let result = if x.abs() > 0.9999 {
+            (0.9999 as f32).atanh().copysign(x)
+        } else {
+            x.atanh()
+        };
+        assert!(result.is_finite(), "x: {}, result: {}", x, result);
+        result
+    }
+    fn activation_derivative(x: f32) -> f32 {
+        1.0 - x.tanh().powi(2)
+    }
 }
 
 #[derive(PartialEq, Copy, Clone, Debug)]
-pub struct GeneticAI {
-    pub gene_weighting: [u16; GENE_COUNT],
-    pub start_location_gene_weighting: [u16; START_LOCATION_GENE_COUNT],
-    //rng: rand::rngs::thread::ThreadRng
+pub struct GeneticAI<A: ActivationFunction> {
+    pub gene_weighting: [f32; GENE_COUNT],
+    pub start_location_gene_weighting: [f32; START_LOCATION_GENE_COUNT],
+    phantom: std::marker::PhantomData<A>, //rng: rand::rngs::thread::ThreadRng
 }
 
-impl GeneticAI {
+impl<A: ActivationFunction> GeneticAI<A> {
     pub fn new() -> Self {
         Self {
-            gene_weighting: [0, 0, 0, 0],
-            start_location_gene_weighting: [0, 0, 0],
+            gene_weighting: [1.0; GENE_COUNT],
+            start_location_gene_weighting: [1.0; START_LOCATION_GENE_COUNT],
+            phantom: std::marker::PhantomData,
         }
     }
 }
 
-impl GeneticAI {
-    fn get_score(
+impl<A: ActivationFunction> GeneticAI<A> {
+    fn get_unprocessed(
         &self,
-        game: &lib::Game,
+        game: &Game,
         player_id: usize,
-        worker: lib::Worker,
+        worker: Worker,
         movement: (u8, u8),
         build: (u8, u8),
         is_near_player: bool,
-    ) -> i32 {
-        if game.board[movement.0 as usize][movement.1 as usize] == lib::TowerStates::Level3 {
-            return std::i32::MAX;
-        }
+    ) -> [f32; GENE_COUNT] {
         let will_be_near_player = game.is_near_player(player_id, movement);
         let will_build_near_player = game.is_near_player(player_id, build);
-        GENES
-            .iter()
-            .zip(self.gene_weighting.iter())
-            .filter(|(_, weighting)| **weighting != 0)
-            .map(|(gene, weighting)| {
-                gene.get_score(
-                    game,
-                    player_id,
-                    worker,
-                    movement,
-                    build,
-                    is_near_player,
-                    will_be_near_player,
-                    will_build_near_player,
-                ) * (*weighting as i32)
-            })
-            .sum()
+        let mut output = [1.0; GENE_COUNT];
+        for (ptr, gene) in output.iter_mut().zip(GENES.iter()) {
+            *ptr = gene.get_score(
+                game,
+                player_id,
+                worker,
+                movement,
+                build,
+                is_near_player,
+                will_be_near_player,
+                will_build_near_player,
+            )
+        }
+        output
+    }
+
+    fn get_score_from_unprocessed(&self, unprocessed: &[f32; GENE_COUNT]) -> f32 {
+        A::activation(
+            unprocessed
+                .iter()
+                .zip(self.gene_weighting.iter())
+                .map(|(gene, weight)| gene * weight)
+                .sum(),
+        )
+    }
+    fn get_score(
+        &self,
+        game: &Game,
+        player_id: usize,
+        worker: Worker,
+        movement: (u8, u8),
+        build: (u8, u8),
+        is_near_player: bool,
+    ) -> f32 {
+        // if game.board[movement.0 as usize][movement.1 as usize] == TowerStates::Level3 {
+        //     return f32::MAX;
+        // }
+        self.get_score_from_unprocessed(&self.get_unprocessed(
+            game,
+            player_id,
+            worker,
+            movement,
+            build,
+            is_near_player,
+        ))
     }
 
     fn get_start_location_score(
@@ -99,122 +157,207 @@ impl GeneticAI {
         player_locations: &[((u8, u8), (u8, u8))],
         start_locations: (u8, u8),
         other_starting_location: Option<(u8, u8)>,
-    ) -> i32 {
+    ) -> f32 {
         START_LOCATION_GENES
             .iter()
             .zip(self.start_location_gene_weighting.iter())
-            .filter(|(_, weighting)| **weighting != 0)
+            .filter(|(_, weighting)| **weighting != 0.0)
             .map(|(gene, weighting)| {
                 gene.get_score(player_locations, start_locations, other_starting_location)
-                    * (*weighting as i32)
+                    * weighting
             })
             .sum()
     }
-    fn simplify(&mut self) {
-        for i in 2..(*self.gene_weighting.iter().min().unwrap_or(&3)) {
-            if self.gene_weighting.iter().all(|val| val % i == 0) {
-                for val in self.gene_weighting.iter_mut() {
-                    *val /= i;
-                }
-            }
-        }
-    }
-    fn create_random(rng: &mut rand::rngs::ThreadRng) -> Self {
-        let gene_weighting = [
-            rng.gen_range(0, 10),
-            rng.gen_range(0, 10),
-            rng.gen_range(0, 10),
-            rng.gen_range(0, 10),
-        ];
-        let start_location_gene_weighting = [
-            rng.gen_range(0, 10),
-            rng.gen_range(0, 10),
-            rng.gen_range(0, 10),
-        ];
+    pub fn create_random(rng: &mut rand::rngs::ThreadRng) -> Self {
+        let gene_weighting = [rng.gen(), rng.gen(), rng.gen(), rng.gen(), rng.gen()];
+        let start_location_gene_weighting = [rng.gen(), rng.gen(), rng.gen()];
         Self {
             gene_weighting,
             start_location_gene_weighting,
+            phantom: std::marker::PhantomData,
         }
+    } //[0.94549954, 0.36510202, 0.18945187, 0.32395408, 0.06980309]
+
+    pub fn get_action_gradients(
+        &self,
+        target_score: f32,
+        unprocessed: &[f32; GENE_COUNT],
+    ) -> [f32; GENE_COUNT] {
+        let with_weights: f32 = unprocessed
+            .iter()
+            .zip(self.gene_weighting.iter())
+            .map(|(gene, weight)| gene * weight)
+            .sum();
+        let output = A::activation(with_weights);
+        // overall_score = (target_score - output).powi(2);
+
+        // d(overall)/d(output) = 2.0 * (target_score - output);
+        // d(output)/d(with_weights) = activation_derivative(with_weights);
+
+        // d(overall)/d(with_weights) = d(output)/d(with_weights) * d(overall)/d(output)
+        // d(overall)/d(with_weights) = activation_derivative(with_weights) * 2.0 * (target_score - output)
+
+        // d(overall)/d(weights) = d(with_weights)/d(weights) * d(overall)/d(with_weights)
+        // d(with_weights)/d(weights) = unprocessed
+        // d(overall)/d(weights) = weights * (activation_derivative(result) * 2.0 * (target_score - output))
+        let d_overall_d_with_weights =
+            A::activation_derivative(with_weights) * 2.0 * (target_score - output);
+        let mut gradients = *unprocessed;
+        for ptr in gradients.iter_mut() {
+            *ptr *= d_overall_d_with_weights;
+        }
+        gradients
     }
 
-    fn create_altered(&self) -> [Self; TOTAL_PERMUTATIONS] {
-        let amount: u16 = 1;
-        let mut altered = [*self; TOTAL_PERMUTATIONS];
-        let g = self.gene_weighting;
-        let gsl = self.start_location_gene_weighting;
-        let mut index = 0;
-        for g0 in [
-            g[0].saturating_sub(amount),
-            g[0],
-            g[0].saturating_add(amount),
-        ]
-        .iter()
-        {
-            for g1 in [
-                g[1].saturating_sub(amount),
-                g[1],
-                g[1].saturating_add(amount),
-            ]
-            .iter()
-            {
-                for g2 in [
-                    g[2].saturating_sub(amount),
-                    g[2],
-                    g[2].saturating_add(amount),
-                ]
+    pub fn learn(&mut self, results: &[TrainingData]) {
+        let mut training_data: Vec<(f32, [f32; GENE_COUNT])> = Vec::new();
+        for (success, player_id, game, (worker, movement, build)) in results.iter() {
+            // Generate more training data
+            // for (success, (worker, movement, build)) in game
+            //     .list_possible_actions(*player_id)
+            //     .into_iter()
+            //     .filter(|other| other != action && false)
+            //     .map(|item| (!success, item))
+            //     .chain(std::iter::once((*success, *action)))
+            // {}
+            let unprocessed = self.get_unprocessed(
+                game,
+                *player_id,
+                *worker,
+                *movement,
+                *build,
+                game.is_near_player(
+                    *player_id,
+                    match *worker {
+                        Worker::One => game.player_locations[*player_id as usize].0,
+                        Worker::Two => game.player_locations[*player_id as usize].1,
+                    },
+                ),
+            );
+            training_data.push((if *success { 1.0 } else { -1.0 }, unprocessed));
+        }
+        debug_assert!({
+            println!("Learning from {} actions", training_data.len());
+            true
+        });
+        fn get_overall_score<A: ActivationFunction>(
+            ai: &GeneticAI<A>,
+            training_data: &[(f32, [f32; GENE_COUNT])],
+        ) -> f64 {
+            training_data
                 .iter()
+                .map(|(target_score, unprocessed)| {
+                    (*target_score as f64 - ai.get_score_from_unprocessed(unprocessed) as f64)
+                        .powi(2)
+                })
+                .sum()
+        }
+        let mut total_score_before: f64 = get_overall_score(self, &training_data);
+
+        for _ in 0..LEARNING_LOOP_COUNT {
+            let mut overall_gradient = [0.0; GENE_COUNT];
+            for (target_score, unprocessed) in training_data.iter() {
+                for (ptr, new) in overall_gradient
+                    .iter_mut()
+                    .zip(self.get_action_gradients(*target_score, unprocessed).iter())
                 {
-                    for g3 in [
-                        g[3].saturating_sub(amount),
-                        g[3],
-                        g[3].saturating_add(amount),
-                    ]
-                    .iter()
+                    *ptr += new;
+                }
+            }
+            let mut new = *self;
+            for (ptr, gradient) in new.gene_weighting.iter_mut().zip(overall_gradient.iter()) {
+                *ptr += gradient * STEP_SIZE;
+            }
+            let new_score = get_overall_score(&new, &training_data);
+            if new_score < total_score_before {
+                *self = new;
+                println!(
+                    "Successfully trained from {} to {}",
+                    total_score_before, new_score
+                );
+                total_score_before = new_score
+            } else {
+                println!(
+                    "Failed training from {} up to {}",
+                    total_score_before, new_score
+                );
+                break;
+            }
+        }
+    }
+    pub fn self_train(&mut self, iterations: usize, batch_size: usize) {
+        for iteration in 0..iterations {
+            if iteration % 10 == 0 {
+                println!("Iteration: {}", iteration);
+            }
+
+            let mut results: Vec<TrainingData> = Vec::new();
+            for _ in 0..batch_size {
+                let mut action_history: Option<[Vec<(Game, Action)>; 3]> =
+                    Some([vec![], vec![], vec![]]);
+                let tmp_players: [Option<&dyn Player>; 3] = [Some(self), Some(self), None];
+                let result = main_loop(tmp_players, false, &mut action_history);
+                for (player_id, action_list) in action_history.unwrap().iter().enumerate() {
+                    for (game, action) in action_list.iter() {
+                        results.push((player_id == result, player_id, *game, *action));
+                    }
+                }
+            }
+            self.learn(&results);
+        }
+    }
+    pub fn train(&mut self, players: Vec<Box<(dyn Player)>>, iterations: usize, batch_size: usize) {
+        let mut total_win_count = 0;
+        for iteration in 0..iterations {
+            let mut win_count = 0;
+            let mut results: Vec<TrainingData> = Vec::new();
+            for _ in 0..batch_size {
+                for player in players.iter() {
+                    let mut action_history1: Option<[Vec<(Game, Action)>; 3]> =
+                        Some([vec![], vec![], vec![]]);
+                    let tmp_players: [Option<&dyn Player>; 3] = [Some(self), Some(&**player), None];
+                    let result1 = main_loop(tmp_players, false, &mut action_history1);
+                    if result1 == 0 {
+                        win_count += 1;
+                    }
+
+                    let mut action_history2: Option<[Vec<(Game, Action)>; 3]> =
+                        Some([vec![], vec![], vec![]]);
+                    let tmp_players: [Option<&dyn Player>; 3] = [Some(&**player), Some(self), None];
+                    let result2 = main_loop(tmp_players, false, &mut action_history2);
+                    if result2 == 1 {
+                        win_count += 1;
+                    }
+                    for (result, action_history) in
+                        [(result1, action_history1), (result2, action_history2)].iter()
                     {
-                        for gsl0 in [
-                            gsl[0].saturating_sub(amount),
-                            gsl[0],
-                            gsl[0].saturating_add(amount),
-                        ]
-                        .iter()
+                        for (player_id, action_list) in
+                            action_history.as_ref().unwrap().iter().enumerate()
                         {
-                            for gsl1 in [
-                                gsl[1].saturating_sub(amount),
-                                gsl[1],
-                                gsl[1].saturating_add(amount),
-                            ]
-                            .iter()
-                            {
-                                for gsl2 in [
-                                    gsl[2].saturating_sub(amount),
-                                    gsl[2],
-                                    gsl[2].saturating_add(amount),
-                                ]
-                                .iter()
-                                {
-                                    let new = Self {
-                                        gene_weighting: [*g0, *g1, *g2, *g3],
-                                        start_location_gene_weighting: [*gsl0, *gsl1, *gsl2],
-                                    };
-                                    if *self != new {
-                                        altered[index] = new;
-                                        index += 1;
-                                    }
-                                }
+                            for (game, action) in action_list.iter() {
+                                results.push((player_id == *result, player_id, *game, *action));
                             }
                         }
                     }
                 }
             }
+            total_win_count += win_count;
+            self.learn(&results);
+            println!(
+                "Iteration: {}, wins: {}, total_wins: {}",
+                iteration,
+                (win_count as f32) / ((batch_size * players.len() * 2) as f32),
+                (total_win_count as f32)
+                    / ((batch_size * players.len() * (iteration + 1) * 2) as f32)
+            );
         }
-        altered
     }
 }
-impl lib::Player for GeneticAI {
-    fn get_action(&self, game: &lib::Game, player_id: usize) -> lib::Action {
+impl<A: ActivationFunction> Player for GeneticAI<A> {
+    fn get_action(&self, game: &Game, player_id: usize) -> Action {
         let actions = game.list_possible_actions(player_id);
         if actions.is_empty() {
-            (lib::Worker::One, (0, 0), (0, 0))
+            (Worker::One, (0, 0), (0, 0))
         } else {
             let location = game.player_locations[player_id];
             let w1_is_near_player = game.is_near_player(player_id, location.0);
@@ -229,7 +372,7 @@ impl lib::Player for GeneticAI {
                             *worker,
                             *movement,
                             *build,
-                            if *worker == lib::Worker::One {
+                            if *worker == Worker::One {
                                 w1_is_near_player
                             } else {
                                 w2_is_near_player
@@ -237,22 +380,28 @@ impl lib::Player for GeneticAI {
                         )
                     })
                 })
-                .collect::<Vec<(lib::Action, i32)>>();
-            if let Some((_, highest_score)) = action_scores.iter().max_by_key(|(_, score)| score) {
-                let options = action_scores
-                    .iter()
-                    .filter(|(_, score)| score == highest_score)
-                    .map(|(action, _)| *action)
-                    .collect::<Vec<lib::Action>>();
-                options[rand::thread_rng().gen_range(0, options.len())]
-            } else {
-                (lib::Worker::One, (0, 0), (0, 0))
+                .collect::<Vec<(Action, f32)>>();
+
+            let mut max = f32::MIN;
+            for (_, score) in action_scores.iter() {
+                if *score > max {
+                    max = *score;
+                }
             }
+            if max == f32::MIN {
+                return (Worker::One, (0, 0), (0, 0));
+            }
+            let options = action_scores
+                .iter()
+                .filter(|(_, score)| *score == max)
+                .map(|(action, _)| *action)
+                .collect::<Vec<Action>>();
+            *options.choose(&mut rand::thread_rng()).unwrap()
         }
     }
     fn get_starting_position(
         &self,
-        _: &lib::Game,
+        _: &Game,
         player_locations: &[((u8, u8), (u8, u8))],
     ) -> ((u8, u8), (u8, u8)) {
         let mut values: Vec<(u8, u8)> = Vec::new();
@@ -264,104 +413,76 @@ impl lib::Player for GeneticAI {
                 values.push(i);
             }
         }
-        let first_location = values
+        let first_start_location_scores = values
             .iter()
-            .max_by_key(|location| {
-                self.get_start_location_score(player_locations, **location, None)
+            .map(|location| {
+                (
+                    *location,
+                    self.get_start_location_score(player_locations, *location, None),
+                )
             })
-            .unwrap_or(&values[0]);
-        let second_location = values
+            .collect::<Vec<_>>();
+        let mut max = ((0, 0), f32::MIN);
+        for (action, score) in first_start_location_scores.iter() {
+            if *score > max.1 {
+                max = (*action, *score);
+            }
+        }
+        let options = first_start_location_scores
             .iter()
-            .filter(|x| *x != first_location)
-            .max_by_key(|location| {
-                self.get_start_location_score(player_locations, **location, Some(*first_location))
+            .filter(|(_, score)| *score == max.1)
+            .map(|(action, _)| *action)
+            .collect::<Vec<(u8, u8)>>();
+        let first_location = *options.choose(&mut rand::thread_rng()).unwrap();
+
+        let second_start_location_scores = values
+            .iter()
+            .filter(|location| **location != first_location)
+            .map(|location| {
+                (
+                    *location,
+                    self.get_start_location_score(
+                        player_locations,
+                        *location,
+                        Some(first_location),
+                    ),
+                )
             })
-            .unwrap_or(&values[0]);
-        (*first_location, *second_location)
+            .collect::<Vec<_>>();
+        let mut max = ((0, 0), f32::MIN);
+        for (action, score) in second_start_location_scores.iter() {
+            if *score > max.1 {
+                max = (*action, *score);
+            }
+        }
+        let options = second_start_location_scores
+            .iter()
+            .filter(|(_, score)| *score == max.1)
+            .map(|(action, _)| *action)
+            .collect::<Vec<(u8, u8)>>();
+        let second_location = *options.choose(&mut rand::thread_rng()).unwrap();
+        (first_location, second_location)
     }
 }
 
-fn compare_ai(ai1: &dyn lib::Player, ai2: &dyn lib::Player, matches: usize) -> (usize, usize) {
+fn compare_ai(ai1: &dyn Player, ai2: &dyn Player, matches: usize) -> (usize, usize) {
     let mut scores = (0, 0);
     for _ in 0..matches {
-        let players: [Option<&dyn lib::Player>; 3] = [Some(ai1), Some(ai2), None];
-        let result = lib::main_loop(players);
-        if let Some(result) = result {
-            if result == 0 {
-                scores.0 += 1
-            } else {
-                scores.1 += 1
-            }
+        let players: [Option<&dyn Player>; 3] = [Some(ai1), Some(ai2), None];
+        let result = main_loop(players, false, &mut None);
+        if result == 0 {
+            scores.0 += 1
+        } else {
+            scores.1 += 1
         }
 
-        let players: [Option<&dyn lib::Player>; 3] = [Some(ai2), Some(ai1), None];
-        let result = lib::main_loop(players);
-        if let Some(result) = result {
-            if result == 0 {
-                scores.1 += 1
-            } else {
-                scores.0 += 1
-            }
+        let players: [Option<&dyn Player>; 3] = [Some(ai2), Some(ai1), None];
+        let result = main_loop(players, false, &mut None);
+        if result == 0 {
+            scores.1 += 1
+        } else {
+            scores.0 += 1
         }
     }
     scores
-}
-
-pub fn train(
-    players: Vec<Box<(dyn lib::Player)>>,
-    iterations: usize,
-    matches: usize,
-) -> Vec<GeneticAI> {
-    let mut ais_for_testing: Vec<Box<(dyn lib::Player)>> = Vec::with_capacity(iterations);
-    let mut ais: Vec<GeneticAI> = Vec::with_capacity(iterations);
-    let mut rng = rand::thread_rng();
-
-    for iteration in 0..iterations {
-        let mut old_ai = GeneticAI::create_random(&mut rng);
-        let mut old_score: usize = players
-            .iter()
-            .chain(ais_for_testing.iter())
-            .map(|ai| compare_ai(&old_ai, &**ai, matches).0)
-            .sum();
-        let mut generations: usize = 0;
-        loop {
-            let altered = old_ai.create_altered();
-            if let Some((better_ai, better_score)) = altered
-                .par_iter()
-                .map(|new_ai| {
-                    (
-                        new_ai,
-                        players
-                            .iter()
-                            .chain(ais_for_testing.iter())
-                            .map(|ai| compare_ai(new_ai, &**ai, matches).0)
-                            .sum::<usize>(),
-                    )
-                })
-                .filter(|(_, score)| *score > old_score)
-                .max_by_key(|(_, score)| *score)
-            {
-                old_score = better_score;
-                old_ai = *better_ai;
-                generations += 1;
-            } else {
-                let accepted = old_score >= (players.len() + ais.len()) * matches;
-                println!(
-                    "{} new score {} (out of {}) at iteration {} after {} generations\n{:?}",
-                    if accepted { "Accepted" } else { "Rejected" },
-                    old_score,
-                    (players.len() + ais.len()) * matches * 2,
-                    iteration,
-                    generations,
-                    old_ai
-                );
-                if accepted {
-                    ais_for_testing.push(Box::new(old_ai));
-                    ais.push(old_ai);
-                }
-                break;
-            }
-        }
-    }
-    ais
 }
