@@ -212,8 +212,8 @@ fn main() {
 
     let mut new_ai =
         genetic_ai::GeneticAI::<genetic_ai::Tanh>::create_random(&mut rand::thread_rng());
-    new_ai.learn(&training_data);
-    // new_ai.self_train(100, 10);
+    new_ai.learn(&training_data, 1000);
+    // new_ai.self_train(10, 20);
     // new_ai.learn(&training_data);
     // new_ai.train(
     //     vec![Box::new(random_choice_player::RandomChoice::new())],

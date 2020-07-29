@@ -6,7 +6,6 @@ use rand::seq::SliceRandom;
 
 const GENE_COUNT: usize = 5;
 const START_LOCATION_GENE_COUNT: usize = 3;
-const LEARNING_LOOP_COUNT: usize = 20000;
 
 const STEP_SIZE: f32 = 0.001;
 
@@ -209,7 +208,7 @@ impl<A: ActivationFunction> GeneticAI<A> {
         gradients
     }
 
-    pub fn learn(&mut self, results: &[TrainingData]) {
+    pub fn learn(&mut self, results: &[TrainingData], iterations: usize) {
         let mut training_data: Vec<(f32, [f32; GENE_COUNT])> = Vec::new();
         for (success, player_id, game, (worker, movement, build)) in results.iter() {
             // Generate more training data
@@ -254,7 +253,7 @@ impl<A: ActivationFunction> GeneticAI<A> {
         }
         let mut total_score_before: f64 = get_overall_score(self, &training_data);
 
-        for _ in 0..LEARNING_LOOP_COUNT {
+        for i in 0..iterations {
             let mut overall_gradient = [0.0; GENE_COUNT];
             for (target_score, unprocessed) in training_data.iter() {
                 for (ptr, new) in overall_gradient
@@ -272,15 +271,16 @@ impl<A: ActivationFunction> GeneticAI<A> {
             if new_score < total_score_before {
                 *self = new;
                 println!(
-                    "Successfully trained from {} to {}",
-                    total_score_before, new_score
+                    "{}: Successfully trained from {} to {}",
+                    i, total_score_before, new_score
                 );
                 total_score_before = new_score
             } else {
                 println!(
-                    "Failed training from {} up to {}",
-                    total_score_before, new_score
+                    "{}: Failed training from {} up to {}",
+                    i, total_score_before, new_score
                 );
+                println!("Gradient was: {:?}", overall_gradient);
                 break;
             }
         }
@@ -303,7 +303,7 @@ impl<A: ActivationFunction> GeneticAI<A> {
                     }
                 }
             }
-            self.learn(&results);
+            self.learn(&results, 100);
         }
     }
     pub fn train(&mut self, players: Vec<Box<(dyn Player)>>, iterations: usize, batch_size: usize) {
@@ -342,7 +342,7 @@ impl<A: ActivationFunction> GeneticAI<A> {
                 }
             }
             total_win_count += win_count;
-            self.learn(&results);
+            self.learn(&results, 100);
             println!(
                 "Iteration: {}, wins: {}, total_wins: {}",
                 iteration,
