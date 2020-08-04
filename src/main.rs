@@ -210,6 +210,21 @@ fn main() {
         println!("Failed to load training data");
     }
 
+    let mut start_location_training_data: Vec<_> = Vec::new();
+    if let Ok(file) = std::fs::File::open("start_location_training_data.json") {
+        let mut buf = std::io::BufReader::new(file);
+        while buf.read_line(&mut line).unwrap() > 0 {
+            if let Ok(deserialized) = serde_json::from_str(&line) {
+                start_location_training_data.push(deserialized);
+            } else {
+                println!("Failed to parse: {}", line);
+            }
+            line.clear();
+        }
+    } else {
+        println!("Failed to load training data");
+    }
+
     let mut new_ai =
         genetic_ai::GeneticAI::<genetic_ai::Tanh>::create_random(&mut rand::thread_rng());
     new_ai.learn(&training_data, 1000);
@@ -229,17 +244,33 @@ fn main() {
     let player2: &dyn Player = &RealPlayer::new();
     let player1: &dyn Player = &new_ai;
 
-    let mut action_history: Option<[Vec<(Game, Action)>; 3]> = Some([vec![], vec![], vec![]]);
+    let mut action_history: Option<_> = Some([vec![], vec![], vec![]]);
+    let mut start_location_history: Option<_> = Some([None, None, None]);
     let players: [Option<&dyn Player>; 3] = if rand::thread_rng().gen::<bool>() {
         [Some(player1), Some(player2), None]
     } else {
         [Some(player2), Some(player1), None]
     };
-    let result = main_loop(players, true, &mut action_history);
+    let result = main_loop(
+        players,
+        true,
+        &mut action_history,
+        &mut start_location_history,
+    );
     println!("Player {} won the game", result);
     for (player_id, action_list) in action_history.unwrap().iter().enumerate() {
-        for (game, action) in action_list.iter() {
+        for (game, action) in action_list.into_iter() {
             training_data.push((player_id == result, player_id, *game, *action));
+        }
+    }
+
+    for (player_id, start_data) in start_location_history.unwrap().iter().enumerate() {
+        if let Some((game, start_locations)) = start_data {
+            start_location_training_data.push((
+                player_id == result,
+                *game,
+                start_locations.clone(),
+            ));
         }
     }
     if let Ok(file) = std::fs::File::create("training_data.json") {
@@ -252,5 +283,17 @@ fn main() {
         }
     } else {
         println!("Failed to write training data");
+    }
+
+    if let Ok(file) = std::fs::File::create("start_location_training_data.json") {
+        let mut buf = std::io::LineWriter::new(file);
+
+        for sd in start_location_training_data.iter() {
+            buf.write(&serde_json::to_string(&sd).unwrap().as_bytes())
+                .unwrap();
+            buf.write(&[b'\n']).unwrap();
+        }
+    } else {
+        println!("Failed to write start location training data");
     }
 }

@@ -296,7 +296,7 @@ impl<A: ActivationFunction> GeneticAI<A> {
                 let mut action_history: Option<[Vec<(Game, Action)>; 3]> =
                     Some([vec![], vec![], vec![]]);
                 let tmp_players: [Option<&dyn Player>; 3] = [Some(self), Some(self), None];
-                let result = main_loop(tmp_players, false, &mut action_history);
+                let result = main_loop(tmp_players, false, &mut action_history, &mut None);
                 for (player_id, action_list) in action_history.unwrap().iter().enumerate() {
                     for (game, action) in action_list.iter() {
                         results.push((player_id == result, player_id, *game, *action));
@@ -316,7 +316,7 @@ impl<A: ActivationFunction> GeneticAI<A> {
                     let mut action_history1: Option<[Vec<(Game, Action)>; 3]> =
                         Some([vec![], vec![], vec![]]);
                     let tmp_players: [Option<&dyn Player>; 3] = [Some(self), Some(&**player), None];
-                    let result1 = main_loop(tmp_players, false, &mut action_history1);
+                    let result1 = main_loop(tmp_players, false, &mut action_history1, &mut None);
                     if result1 == 0 {
                         win_count += 1;
                     }
@@ -324,7 +324,7 @@ impl<A: ActivationFunction> GeneticAI<A> {
                     let mut action_history2: Option<[Vec<(Game, Action)>; 3]> =
                         Some([vec![], vec![], vec![]]);
                     let tmp_players: [Option<&dyn Player>; 3] = [Some(&**player), Some(self), None];
-                    let result2 = main_loop(tmp_players, false, &mut action_history2);
+                    let result2 = main_loop(tmp_players, false, &mut action_history2, &mut None);
                     if result2 == 1 {
                         win_count += 1;
                     }
@@ -469,7 +469,7 @@ fn compare_ai(ai1: &dyn Player, ai2: &dyn Player, matches: usize) -> (usize, usi
     let mut scores = (0, 0);
     for _ in 0..matches {
         let players: [Option<&dyn Player>; 3] = [Some(ai1), Some(ai2), None];
-        let result = main_loop(players, false, &mut None);
+        let result = main_loop(players, false, &mut None, &mut None);
         if result == 0 {
             scores.0 += 1
         } else {
@@ -477,7 +477,7 @@ fn compare_ai(ai1: &dyn Player, ai2: &dyn Player, matches: usize) -> (usize, usi
         }
 
         let players: [Option<&dyn Player>; 3] = [Some(ai2), Some(ai1), None];
-        let result = main_loop(players, false, &mut None);
+        let result = main_loop(players, false, &mut None, &mut None);
         if result == 0 {
             scores.1 += 1
         } else {

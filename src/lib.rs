@@ -12,7 +12,6 @@ pub trait Player: Send + Sync {
 
     fn get_starting_position(
         &self,
-
         game: &Game,
         player_locations: &[((u8, u8), (u8, u8))],
     ) -> StartLocation;
@@ -134,11 +133,17 @@ impl Game {
 
         let (old_w1, old_w2) = self.player_locations[player_id];
 
-        build_x <= 4
+        let can_move_to_square =
+            checked_movement || self.can_move_to_square(player_id, worker, movement);
+        if self.board[move_x as usize][move_y as usize] == TowerStates::Level3 {
+            return can_move_to_square;
+            // If will win by moving, then don't check build
+        }
+        can_move_to_square
+            && build_x <= 4
             && build_y <= 4
             && ((worker == Worker::One && build != old_w2)
                 || (worker == Worker::Two && build != old_w1))
-            && (checked_movement || self.can_move_to_square(player_id, worker, movement))
             && self
                 .player_locations
                 .iter()
@@ -258,12 +263,44 @@ impl Game {
                         && (w2.1 as i8 - pos.1 as i8).abs() <= 1)
             })
     }
+
+    pub fn apply_action(
+        &mut self,
+        player_id: usize,
+        (worker, (move_x, move_y), (build_x, build_y)): Action,
+    ) -> Result<bool, ()> {
+        if self.is_valid(
+            player_id,
+            worker,
+            (move_x, move_y),
+            (build_x, build_y),
+            false,
+        ) {
+            if worker == Worker::One {
+                self.player_locations[player_id].0 = (move_x, move_y);
+            } else {
+                self.player_locations[player_id].1 = (move_x, move_y);
+            }
+            if self.board[move_x as usize][move_y as usize] == TowerStates::Level3 {
+                return Ok(true);
+            }
+            self.board[build_x as usize][build_y as usize] = self.board[build_x as usize]
+                [build_y as usize]
+                .increase()
+                .unwrap();
+            // Since is_valid returned true, then it must be able to increase
+            Ok(false)
+        } else {
+            Err(())
+        }
+    }
 }
 
 pub fn main_loop(
     player_controls: [Option<&dyn Player>; 3],
     print_board: bool,
     record_moves: &mut Option<[Vec<(Game, Action)>; 3]>,
+    record_start: &mut Option<[Option<(Game, Vec<((u8, u8), (u8, u8))>)>; 3]>,
 ) -> usize {
     let mut game = Game {
         board: [[TowerStates::Empty; 5]; 5],
@@ -290,6 +327,9 @@ pub fn main_loop(
         if let Some(player) = &player_controls[player_id] {
             loop {
                 let (w1, w2) = player.get_starting_position(&game, &start_locations);
+                if let Some(record_start) = record_start {
+                    record_start[player_id] = Some((game.clone(), start_locations.clone()));
+                }
                 if w1 != w2
                     && start_locations
                         .iter()
@@ -324,31 +364,11 @@ pub fn main_loop(
                 }
                 let (worker, (move_x, move_y), (build_x, build_y)) =
                     player.get_action(&game, player_id);
-
-                if game.is_valid(
-                    player_id,
-                    worker,
-                    (move_x, move_y),
-                    (build_x, build_y),
-                    false,
-                ) {
-                    if let Some(action_history) = record_moves {
-                        action_history[player_id]
-                            .push((game, (worker, (move_x, move_y), (build_x, build_y))));
-                    }
-                    if game.board[move_x as usize][move_y as usize] == TowerStates::Level3 {
-                        //println!("Player {} won", player_id);
-                        //game.print_board();
+                if let Ok(result) =
+                    game.apply_action(player_id, (worker, (move_x, move_y), (build_x, build_y)))
+                {
+                    if result {
                         return player_id;
-                    }
-                    if worker == Worker::One {
-                        game.player_locations[player_id].0 = (move_x, move_y);
-                    } else {
-                        game.player_locations[player_id].1 = (move_x, move_y);
-                    }
-
-                    if let Some(new) = game.board[build_x as usize][build_y as usize].increase() {
-                        game.board[build_x as usize][build_y as usize] = new;
                     }
                 } else {
                     //println!("Not a valid move");
