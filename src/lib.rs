@@ -1,4 +1,5 @@
 mod action_score_algorithms;
+pub mod bruteforce;
 mod first_choice_player;
 pub mod genetic_ai;
 mod random_choice_player;
@@ -244,7 +245,7 @@ impl Game {
                     (m.0 + 1, m.1),
                     (m.0 + 1, m.1 + 1),
                 ] {
-                    if self.is_valid(player_id, worker, m, b, true) {
+                    if b.0 < 5 && b.1 < 5 && self.is_valid(player_id, worker, m, b, true) {
                         possible_actions.push((worker, m, b));
                     }
                 }
@@ -268,14 +269,17 @@ impl Game {
         &mut self,
         player_id: usize,
         (worker, (move_x, move_y), (build_x, build_y)): Action,
+        checked_is_valid: bool,
     ) -> Result<bool, ()> {
-        if self.is_valid(
-            player_id,
-            worker,
-            (move_x, move_y),
-            (build_x, build_y),
-            false,
-        ) {
+        if checked_is_valid
+            || self.is_valid(
+                player_id,
+                worker,
+                (move_x, move_y),
+                (build_x, build_y),
+                false,
+            )
+        {
             if worker == Worker::One {
                 self.player_locations[player_id].0 = (move_x, move_y);
             } else {
@@ -364,9 +368,11 @@ pub fn main_loop(
                 }
                 let (worker, (move_x, move_y), (build_x, build_y)) =
                     player.get_action(&game, player_id);
-                if let Ok(result) =
-                    game.apply_action(player_id, (worker, (move_x, move_y), (build_x, build_y)))
-                {
+                if let Ok(result) = game.apply_action(
+                    player_id,
+                    (worker, (move_x, move_y), (build_x, build_y)),
+                    false,
+                ) {
                     if result {
                         return player_id;
                     }

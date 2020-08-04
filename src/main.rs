@@ -225,9 +225,9 @@ fn main() {
         println!("Failed to load training data");
     }
 
-    let mut new_ai =
-        genetic_ai::GeneticAI::<genetic_ai::Tanh>::create_random(&mut rand::thread_rng());
-    new_ai.learn(&training_data, 1000);
+    // let mut new_ai =
+    //     genetic_ai::GeneticAI::<genetic_ai::Tanh>::create_random(&mut rand::thread_rng());
+    // new_ai.learn(&training_data, 1000);
     // new_ai.self_train(10, 20);
     // new_ai.learn(&training_data);
     // new_ai.train(
@@ -240,12 +240,31 @@ fn main() {
     //     100,
     //     10,
     // );
-    println!("{:?}", new_ai);
-    let player2: &dyn Player = &RealPlayer::new();
-    let player1: &dyn Player = &new_ai;
+    // println!("{:?}", new_ai);
+    // let player2: &dyn Player = &RealPlayer::new();
+    let player2: &dyn Player = &bruteforce::BruteForce::new(0);
+    let player1: &dyn Player = &bruteforce::BruteForce::new(3);
+    // let player1: &dyn Player = &new_ai;
 
     let mut action_history: Option<_> = Some([vec![], vec![], vec![]]);
     let mut start_location_history: Option<_> = Some([None, None, None]);
+
+    let mut scores = [0, 0];
+    for round in 0..10 {
+        let player1_first = rand::thread_rng().gen::<bool>();
+        let players: [Option<&dyn Player>; 3] = if player1_first {
+            [Some(player1), Some(player2), None]
+        } else {
+            [Some(player2), Some(player1), None]
+        };
+        let result = main_loop(players, false, &mut None, &mut None);
+        scores[if player1_first { result } else { 1 - result }] += 1;
+        println!("Scores: {:?}", scores);
+    }
+    println!("Scores: {:?}", scores);
+    return;
+    let player1: &dyn Player = &RealPlayer::new();
+    let player2: &dyn Player = &bruteforce::BruteForce::new(4);
     let players: [Option<&dyn Player>; 3] = if rand::thread_rng().gen::<bool>() {
         [Some(player1), Some(player2), None]
     } else {
