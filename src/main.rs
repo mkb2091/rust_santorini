@@ -225,8 +225,7 @@ fn main() {
         println!("Failed to load training data");
     }
 
-    let mut new_ai =
-        genetic_ai::GeneticAI::<nn::Tanh>::create_random(&mut rand::thread_rng());
+    let mut new_ai = genetic_ai::GeneticAI::<nn::Tanh>::create_random(&mut rand::thread_rng());
     new_ai.learn(&training_data, 1000);
     // new_ai.self_train(100, 5);
     // new_ai.learn(&training_data);

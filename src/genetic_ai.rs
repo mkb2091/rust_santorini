@@ -89,8 +89,7 @@ impl<A: nn::ActivationFunction> GeneticAI<A> {
         }
         output
     }
-    
-    
+
     fn get_unprocessed_starting_location(
         &self,
         player_locations: &[((u8, u8), (u8, u8))],
@@ -99,8 +98,7 @@ impl<A: nn::ActivationFunction> GeneticAI<A> {
     ) -> [f32; START_LOCATION_GENE_COUNT] {
         let mut output = [1.0; START_LOCATION_GENE_COUNT];
         for (ptr, gene) in output.iter_mut().zip(START_LOCATION_GENES.iter()) {
-            *ptr = 
-                gene.get_score(player_locations, start_locations, other_starting_location);
+            *ptr = gene.get_score(player_locations, start_locations, other_starting_location);
         }
         output
     }
@@ -132,13 +130,21 @@ impl<A: nn::ActivationFunction> GeneticAI<A> {
         start_locations: (u8, u8),
         other_starting_location: Option<(u8, u8)>,
     ) -> f32 {
-        self.start_location_gene_weighting.predict(&self.get_unprocessed_starting_location(player_locations, start_locations, other_starting_location))
+        self.start_location_gene_weighting
+            .predict(&self.get_unprocessed_starting_location(
+                player_locations,
+                start_locations,
+                other_starting_location,
+            ))
     }
-        
+
     pub fn create_random(rng: &mut rand::rngs::ThreadRng) -> Self {
         Self {
             gene_weighting: nn::NeuralNet::create_random(GENE_COUNT, rng),
-            start_location_gene_weighting: nn::NeuralNet::create_random(START_LOCATION_GENE_COUNT, rng),
+            start_location_gene_weighting: nn::NeuralNet::create_random(
+                START_LOCATION_GENE_COUNT,
+                rng,
+            ),
         }
     }
 
@@ -173,7 +179,8 @@ impl<A: nn::ActivationFunction> GeneticAI<A> {
             println!("Learning from {} actions", training_data.len());
             true
         });
-        self.gene_weighting.learn(&training_data, iterations, STEP_SIZE);
+        self.gene_weighting
+            .learn(&training_data, iterations, STEP_SIZE);
     }
     pub fn self_train(&mut self, iterations: usize, batch_size: usize) {
         for iteration in 0..iterations {
@@ -376,4 +383,3 @@ fn compare_ai(ai1: &dyn Player, ai2: &dyn Player, matches: usize) -> (usize, usi
     }
     scores
 }
-

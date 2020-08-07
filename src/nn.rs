@@ -43,18 +43,18 @@ impl<A: ActivationFunction> NeuralNet<A> {
             phantom: std::marker::PhantomData,
         }
     }
-	
-	pub fn create_random(input_size: usize, rng: &mut rand::rngs::ThreadRng) -> Self {
-		let mut network = Vec::with_capacity(input_size + 1);
-		for _ in 0..(input_size + 1) {
-			network.push(rng.gen());
-		}
-		Self {
-			network,
-			input_size,
-			phantom: std::marker::PhantomData
-		}
-	}
+
+    pub fn create_random(input_size: usize, rng: &mut rand::rngs::ThreadRng) -> Self {
+        let mut network = Vec::with_capacity(input_size + 1);
+        for _ in 0..(input_size + 1) {
+            network.push(rng.gen());
+        }
+        Self {
+            network,
+            input_size,
+            phantom: std::marker::PhantomData,
+        }
+    }
 
     fn get_unactivated(&self, inputs: &[f32]) -> f32 {
         self.network
@@ -98,7 +98,12 @@ impl<A: ActivationFunction> NeuralNet<A> {
         gradients
     }
 
-    pub fn learn<T: AsRef<[f32]>>(&mut self, training_data: &[(f32, T)], iterations: usize, step_size: f32) {
+    pub fn learn<T: AsRef<[f32]>>(
+        &mut self,
+        training_data: &[(f32, T)],
+        iterations: usize,
+        step_size: f32,
+    ) {
         debug_assert!({
             println!("Learning from {} actions", training_data.len());
             true
@@ -119,10 +124,10 @@ impl<A: ActivationFunction> NeuralNet<A> {
         for i in 0..iterations {
             let mut overall_gradient = vec![0.0; self.network.len()];
             for (target_score, inputs) in training_data.iter() {
-                for (ptr, new) in overall_gradient
-                    .iter_mut()
-                    .zip(self.get_action_gradients(inputs.as_ref(), *target_score).iter())
-                {
+                for (ptr, new) in overall_gradient.iter_mut().zip(
+                    self.get_action_gradients(inputs.as_ref(), *target_score)
+                        .iter(),
+                ) {
                     *ptr += new;
                 }
             }
