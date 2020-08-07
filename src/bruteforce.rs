@@ -1,13 +1,23 @@
 use crate::*;
 use rand::prelude::*;
 
-pub struct BruteForce {
+pub struct BruteForce<A: nn::ActivationFunction> {
+    game_evaluator: game_prediction::GamePrediction<A>,
     depth: usize,
+    surrender_threshold: f32,
 }
 
-impl BruteForce {
-    pub fn new(depth: usize) -> Self {
-        Self { depth }
+impl<A: nn::ActivationFunction> BruteForce<A> {
+    pub fn new(
+        game_evaluator: game_prediction::GamePrediction<A>,
+        depth: usize,
+        surrender_threshold: f32,
+    ) -> Self {
+        Self {
+            game_evaluator,
+            depth,
+            surrender_threshold,
+        }
     }
 
     fn evaluate_action(
@@ -22,6 +32,12 @@ impl BruteForce {
             Ok(false) => {}
             Err(()) => return -1.0,
         };
+
+        //let game_evaluation = self.game_evaluator.predict(&game, player_id);
+        //if game_evaluation < self.surrender_threshold {
+        //    return game_evaluation;
+        //}
+
         // Might need fixing/improving for when dealing with 3 player
         let next_player = (player_id + 1) % 3;
         let next_player = if game.player_statuses[next_player] == Status::Playing {
@@ -29,8 +45,12 @@ impl BruteForce {
         } else {
             (player_id + 2) % 3
         };
-        if depth != 0 {
-            let mut other_players_best_outcome = f32::MIN;
+        let game_evaluation = self.game_evaluator.predict(&game, next_player);
+        let other_players_best_outcome = if game_evaluation < self.surrender_threshold || depth == 0
+        {
+            game_evaluation
+        } else {
+            let mut other_players_best_outcome = -1.0;
             for action2 in game.list_possible_actions(next_player).into_iter() {
                 let score = self.evaluate_action(game, next_player, action2, depth - 1);
                 if score > other_players_best_outcome {
@@ -40,19 +60,12 @@ impl BruteForce {
                     other_players_best_outcome = score;
                 }
             }
-            -other_players_best_outcome
-        } else {
-            let (w1, w2) = game.player_locations[player_id];
-            let (nw1, nw2) = game.player_locations[next_player];
-            (game.board[w1.0 as usize][w1.1 as usize].to_int() as i32
-                + game.board[w2.0 as usize][w2.1 as usize].to_int() as i32
-                - game.board[nw1.0 as usize][nw1.1 as usize].to_int() as i32
-                - game.board[nw2.0 as usize][nw2.1 as usize].to_int() as i32) as f32
-                * 0.1
-        }
+            other_players_best_outcome
+        };
+        -other_players_best_outcome
     }
 }
-impl Player for BruteForce {
+impl<A: nn::ActivationFunction> Player for BruteForce<A> {
     fn get_action(&self, game: &Game, player_id: usize) -> Action {
         let mut actions = (f32::MIN, Vec::new());
         for action in game.list_possible_actions(player_id).into_iter() {

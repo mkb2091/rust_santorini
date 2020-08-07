@@ -5,6 +5,7 @@ pub mod genetic_ai;
 mod random_choice_player;
 mod start_location_score_algorithms;
 
+pub mod game_prediction;
 pub mod nn;
 
 pub type Action = (Worker, (u8, u8), (u8, u8));
@@ -265,6 +266,29 @@ impl Game {
                     || ((w2.0 as i8 - pos.0 as i8).abs() <= 1
                         && (w2.1 as i8 - pos.1 as i8).abs() <= 1)
             })
+    }
+
+    pub fn can_win_on_next_turn(&self, player_id: usize) -> bool {
+        let (w1, w2) = self.player_locations[player_id];
+        for &(wx, wy) in &[w1, w2] {
+            if wx >= 5 || wy >= 5 {
+                return false;
+            }
+            if self.board[wx as usize][wy as usize] == TowerStates::Level2 {
+                for &mx in &[wx.saturating_sub(1), wx, wx + 1] {
+                    if mx < 5 {
+                        for &my in &[wy.saturating_sub(1), wy, wy + 1] {
+                            if my < 5 {
+                                if self.board[mx as usize][my as usize] == TowerStates::Level3 {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
     }
 
     pub fn apply_action(

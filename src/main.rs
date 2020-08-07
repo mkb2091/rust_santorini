@@ -227,6 +227,18 @@ fn main() {
 
     let mut new_ai = genetic_ai::GeneticAI::<nn::Tanh>::create_random(&mut rand::thread_rng());
     new_ai.learn(&training_data, 1000);
+
+    let mut game_predictor = game_prediction::GamePrediction::<nn::Tanh>::create_random(&mut rand::thread_rng());
+    game_predictor.learn(
+        &training_data
+            .iter()
+            .cloned()
+            .map(|(success, player_id, game, _action)| (game, player_id, success))
+            .collect::<Vec<_>>(),
+        100000,
+        0.0001,
+    );
+    println!("{:?}", game_predictor);
     // new_ai.self_train(100, 5);
     // new_ai.learn(&training_data);
     // new_ai.train(
@@ -241,14 +253,15 @@ fn main() {
     // );
     // println!("{:?}", new_ai);
     // let player2: &dyn Player = &RealPlayer::new();
+
     let player1: &dyn Player = &new_ai;
-    let player2: &dyn Player = &bruteforce::BruteForce::new(2);
+    let player2: &dyn Player = &bruteforce::BruteForce::new(game_predictor, 3, -0.9);
 
     let mut action_history: Option<_> = Some([vec![], vec![], vec![]]);
     let mut start_location_history: Option<_> = Some([None, None, None]);
 
     let mut scores = [0, 0];
-    for round in 0..1000 {
+    for round in 0..1 {
         let player1_first = rand::thread_rng().gen::<bool>();
         let players: [Option<&dyn Player>; 3] = if player1_first {
             [Some(player1), Some(player2), None]

@@ -120,7 +120,7 @@ impl<A: ActivationFunction> NeuralNet<A> {
                 .sum()
         }
         let mut total_score_before: f64 = get_overall_score(self, &training_data);
-
+        let old_score = total_score_before;
         for i in 0..iterations {
             let mut overall_gradient = vec![0.0; self.network.len()];
             for (target_score, inputs) in training_data.iter() {
@@ -138,17 +138,21 @@ impl<A: ActivationFunction> NeuralNet<A> {
             let new_score = get_overall_score(&new, &training_data);
             if new_score < total_score_before {
                 *self = new;
-                println!(
+                /*println!(
                     "{}: Successfully trained from {} to {}",
                     i, total_score_before, new_score
-                );
+                );*/
                 total_score_before = new_score
             } else {
-                println!(
+                /*println!(
                     "{}: Failed training from {} up to {}",
                     i, total_score_before, new_score
+                );*/
+                //println!("Gradient was: {:?}", overall_gradient);
+                println!(
+                    "{}: Successfully trained from {} to {}",
+                    i, old_score, total_score_before
                 );
-                println!("Gradient was: {:?}", overall_gradient);
                 break;
             }
         }
