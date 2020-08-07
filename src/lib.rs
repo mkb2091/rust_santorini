@@ -5,6 +5,8 @@ pub mod genetic_ai;
 mod random_choice_player;
 mod start_location_score_algorithms;
 
+pub mod nn;
+
 pub type Action = (Worker, (u8, u8), (u8, u8));
 pub type StartLocation = ((u8, u8), (u8, u8));
 

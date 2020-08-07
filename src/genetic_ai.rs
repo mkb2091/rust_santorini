@@ -4,12 +4,12 @@ use rayon::prelude::*;
 
 use rand::seq::SliceRandom;
 
-const GENE_COUNT: usize = 5;
+const GENE_COUNT: usize = 4;
 const START_LOCATION_GENE_COUNT: usize = 3;
 
 const STEP_SIZE: f32 = 0.001;
 
-const GENES: [&'static dyn ActionScorer; GENE_COUNT - 1] = [
+const GENES: [&'static dyn ActionScorer; GENE_COUNT] = [
     &action_score_algorithms::PrioritizeClimbing::new(),
     &action_score_algorithms::PrioritizeCapping::new(),
     &action_score_algorithms::PrioritizeBlocking::new(),
@@ -47,52 +47,22 @@ pub trait StartScorer: Sync + Send {
     ) -> f32;
 }
 
-pub trait ActivationFunction:
-    std::marker::Sync + std::marker::Send + std::fmt::Debug + std::marker::Copy + Clone
-{
-    fn activation(x: f32) -> f32;
-    fn inverse_activation(x: f32) -> f32;
-    fn activation_derivative(x: f32) -> f32;
+#[derive(PartialEq, Clone, Debug)]
+pub struct GeneticAI<A: nn::ActivationFunction> {
+    pub gene_weighting: nn::NeuralNet<A>,
+    pub start_location_gene_weighting: nn::NeuralNet<A>,
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct Tanh {}
-impl ActivationFunction for Tanh {
-    fn activation(x: f32) -> f32 {
-        x.tanh()
-    }
-    fn inverse_activation(x: f32) -> f32 {
-        let result = if x.abs() > 0.9999 {
-            (0.9999 as f32).atanh().copysign(x)
-        } else {
-            x.atanh()
-        };
-        assert!(result.is_finite(), "x: {}, result: {}", x, result);
-        result
-    }
-    fn activation_derivative(x: f32) -> f32 {
-        1.0 - x.tanh().powi(2)
-    }
-}
-
-#[derive(PartialEq, Copy, Clone, Debug)]
-pub struct GeneticAI<A: ActivationFunction> {
-    pub gene_weighting: [f32; GENE_COUNT],
-    pub start_location_gene_weighting: [f32; START_LOCATION_GENE_COUNT],
-    phantom: std::marker::PhantomData<A>, //rng: rand::rngs::thread::ThreadRng
-}
-
-impl<A: ActivationFunction> GeneticAI<A> {
+impl<A: nn::ActivationFunction> GeneticAI<A> {
     pub fn new() -> Self {
         Self {
-            gene_weighting: [1.0; GENE_COUNT],
-            start_location_gene_weighting: [1.0; START_LOCATION_GENE_COUNT],
-            phantom: std::marker::PhantomData,
+            gene_weighting: nn::NeuralNet::new(GENE_COUNT),
+            start_location_gene_weighting: nn::NeuralNet::new(GENE_COUNT),
         }
     }
 }
 
-impl<A: ActivationFunction> GeneticAI<A> {
+impl<A: nn::ActivationFunction> GeneticAI<A> {
     fn get_unprocessed(
         &self,
         game: &Game,
@@ -119,15 +89,20 @@ impl<A: ActivationFunction> GeneticAI<A> {
         }
         output
     }
-
-    fn get_score_from_unprocessed(&self, unprocessed: &[f32; GENE_COUNT]) -> f32 {
-        A::activation(
-            unprocessed
-                .iter()
-                .zip(self.gene_weighting.iter())
-                .map(|(gene, weight)| gene * weight)
-                .sum(),
-        )
+    
+    
+    fn get_unprocessed_starting_location(
+        &self,
+        player_locations: &[((u8, u8), (u8, u8))],
+        start_locations: (u8, u8),
+        other_starting_location: Option<(u8, u8)>,
+    ) -> [f32; START_LOCATION_GENE_COUNT] {
+        let mut output = [1.0; START_LOCATION_GENE_COUNT];
+        for (ptr, gene) in output.iter_mut().zip(START_LOCATION_GENES.iter()) {
+            *ptr = 
+                gene.get_score(player_locations, start_locations, other_starting_location);
+        }
+        output
     }
     fn get_score(
         &self,
@@ -141,7 +116,7 @@ impl<A: ActivationFunction> GeneticAI<A> {
         // if game.board[movement.0 as usize][movement.1 as usize] == TowerStates::Level3 {
         //     return f32::MAX;
         // }
-        self.get_score_from_unprocessed(&self.get_unprocessed(
+        self.gene_weighting.predict(&self.get_unprocessed(
             game,
             player_id,
             worker,
@@ -157,55 +132,14 @@ impl<A: ActivationFunction> GeneticAI<A> {
         start_locations: (u8, u8),
         other_starting_location: Option<(u8, u8)>,
     ) -> f32 {
-        START_LOCATION_GENES
-            .iter()
-            .zip(self.start_location_gene_weighting.iter())
-            .filter(|(_, weighting)| **weighting != 0.0)
-            .map(|(gene, weighting)| {
-                gene.get_score(player_locations, start_locations, other_starting_location)
-                    * weighting
-            })
-            .sum()
+        self.start_location_gene_weighting.predict(&self.get_unprocessed_starting_location(player_locations, start_locations, other_starting_location))
     }
+        
     pub fn create_random(rng: &mut rand::rngs::ThreadRng) -> Self {
-        let gene_weighting = [rng.gen(), rng.gen(), rng.gen(), rng.gen(), rng.gen()];
-        let start_location_gene_weighting = [rng.gen(), rng.gen(), rng.gen()];
         Self {
-            gene_weighting,
-            start_location_gene_weighting,
-            phantom: std::marker::PhantomData,
+            gene_weighting: nn::NeuralNet::create_random(GENE_COUNT, rng),
+            start_location_gene_weighting: nn::NeuralNet::create_random(START_LOCATION_GENE_COUNT, rng),
         }
-    } //[0.94549954, 0.36510202, 0.18945187, 0.32395408, 0.06980309]
-
-    pub fn get_action_gradients(
-        &self,
-        target_score: f32,
-        unprocessed: &[f32; GENE_COUNT],
-    ) -> [f32; GENE_COUNT] {
-        let with_weights: f32 = unprocessed
-            .iter()
-            .zip(self.gene_weighting.iter())
-            .map(|(gene, weight)| gene * weight)
-            .sum();
-        let output = A::activation(with_weights);
-        // overall_score = (target_score - output).powi(2);
-
-        // d(overall)/d(output) = 2.0 * (target_score - output);
-        // d(output)/d(with_weights) = activation_derivative(with_weights);
-
-        // d(overall)/d(with_weights) = d(output)/d(with_weights) * d(overall)/d(output)
-        // d(overall)/d(with_weights) = activation_derivative(with_weights) * 2.0 * (target_score - output)
-
-        // d(overall)/d(weights) = d(with_weights)/d(weights) * d(overall)/d(with_weights)
-        // d(with_weights)/d(weights) = unprocessed
-        // d(overall)/d(weights) = weights * (activation_derivative(result) * 2.0 * (target_score - output))
-        let d_overall_d_with_weights =
-            A::activation_derivative(with_weights) * 2.0 * (target_score - output);
-        let mut gradients = *unprocessed;
-        for ptr in gradients.iter_mut() {
-            *ptr *= d_overall_d_with_weights;
-        }
-        gradients
     }
 
     pub fn learn(&mut self, results: &[TrainingData], iterations: usize) {
@@ -239,51 +173,7 @@ impl<A: ActivationFunction> GeneticAI<A> {
             println!("Learning from {} actions", training_data.len());
             true
         });
-        fn get_overall_score<A: ActivationFunction>(
-            ai: &GeneticAI<A>,
-            training_data: &[(f32, [f32; GENE_COUNT])],
-        ) -> f64 {
-            training_data
-                .iter()
-                .map(|(target_score, unprocessed)| {
-                    (*target_score as f64 - ai.get_score_from_unprocessed(unprocessed) as f64)
-                        .powi(2)
-                })
-                .sum()
-        }
-        let mut total_score_before: f64 = get_overall_score(self, &training_data);
-
-        for i in 0..iterations {
-            let mut overall_gradient = [0.0; GENE_COUNT];
-            for (target_score, unprocessed) in training_data.iter() {
-                for (ptr, new) in overall_gradient
-                    .iter_mut()
-                    .zip(self.get_action_gradients(*target_score, unprocessed).iter())
-                {
-                    *ptr += new;
-                }
-            }
-            let mut new = *self;
-            for (ptr, gradient) in new.gene_weighting.iter_mut().zip(overall_gradient.iter()) {
-                *ptr += gradient * STEP_SIZE;
-            }
-            let new_score = get_overall_score(&new, &training_data);
-            if new_score < total_score_before {
-                *self = new;
-                println!(
-                    "{}: Successfully trained from {} to {}",
-                    i, total_score_before, new_score
-                );
-                total_score_before = new_score
-            } else {
-                println!(
-                    "{}: Failed training from {} up to {}",
-                    i, total_score_before, new_score
-                );
-                println!("Gradient was: {:?}", overall_gradient);
-                break;
-            }
-        }
+        self.gene_weighting.learn(&training_data, iterations, STEP_SIZE);
     }
     pub fn self_train(&mut self, iterations: usize, batch_size: usize) {
         for iteration in 0..iterations {
@@ -353,7 +243,7 @@ impl<A: ActivationFunction> GeneticAI<A> {
         }
     }
 }
-impl<A: ActivationFunction> Player for GeneticAI<A> {
+impl<A: nn::ActivationFunction> Player for GeneticAI<A> {
     fn get_action(&self, game: &Game, player_id: usize) -> Action {
         let actions = game.list_possible_actions(player_id);
         if actions.is_empty() {
@@ -486,3 +376,4 @@ fn compare_ai(ai1: &dyn Player, ai2: &dyn Player, matches: usize) -> (usize, usi
     }
     scores
 }
+
